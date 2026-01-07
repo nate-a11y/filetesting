@@ -1,4 +1,5 @@
 import type { ColumnMapping } from '@/types/schemas';
+import { formatPhone, validatePhone } from './phone-utils';
 
 // LimoAnywhere contact column mappings
 export const LIMOANYWHERE_CONTACT_MAPPINGS: ColumnMapping[] = [
@@ -147,95 +148,140 @@ const GARBAGE_ADDRESS_PATTERNS = [
   /^n\/?a$/i, /^unknown$/i, /^pending$/i, /restaurant\s+in\s+/i
 ];
 
+// Format and clean a phone number - returns formatted number or placeholder if invalid
+function cleanPhoneNumber(phone: string | undefined): string {
+  if (!phone?.trim()) return '';
+
+  const cleaned = phone.trim();
+  const validation = validatePhone(cleaned);
+
+  if (validation.isValid && validation.formatted) {
+    return validation.formatted;
+  }
+
+  // Try with suggestion (adds +1 for 10-digit US numbers)
+  if (validation.suggestion) {
+    const retryValidation = validatePhone(validation.suggestion);
+    if (retryValidation.isValid && retryValidation.formatted) {
+      return retryValidation.formatted;
+    }
+  }
+
+  // Return original if we can't format it - validation will catch it later
+  return cleaned;
+}
+
 // Apply all data transformations
 export function applyPhoneFallback(data: Record<string, string>[]): Record<string, string>[] {
-  return data.map(row => {
-    const result = { ...row };
+  return data
+    // First, filter out records with no first AND last name
+    .filter(row => {
+      const firstName = row.firstName?.trim();
+      const lastName = row.lastName?.trim();
+      // Keep record only if it has at least one name part
+      // After name cleaning, we'll check again
+      return firstName || lastName;
+    })
+    .map(row => {
+      const result = { ...row };
 
-    // === PHONE FALLBACK ===
-    if (!result.mobilePhone?.trim()) {
-      if (result._homePhone?.trim()) {
-        result.mobilePhone = result._homePhone;
-      } else if (result._officePhone?.trim()) {
-        result.mobilePhone = result._officePhone;
-      } else {
-        result.mobilePhone = PLACEHOLDER_PHONE;
-      }
-    }
-
-    // === EMAIL: Take first if multiple ===
-    if (result.email?.includes(';')) {
-      const emails = result.email.split(';').map(e => e.trim()).filter(Boolean);
-      result.email = emails[0] || '';
-    }
-
-    // === NAME CLEANING ===
-    // Handle full name in firstName field
-    if (result.firstName?.includes(' ') && (!result.lastName || result.lastName.match(/^[\(&-]/))) {
-      const parts = result.firstName.split(/\s+/);
-      if (parts.length >= 2) {
-        result.firstName = parts[0];
-        result.lastName = parts.slice(1).join(' ');
-      }
-    }
-
-    // Clean lastName starting with special chars
-    if (result.lastName?.match(/^[\(&-\s]+/)) {
-      result.lastName = result.lastName.replace(/^[\(&-\s]+/, '').replace(/[\)]+$/, '').trim();
-    }
-
-    // Mark non-person entries
-    if (result.firstName && NON_PERSON_NAMES.has(result.firstName.toLowerCase())) {
-      result._isBusinessEntry = 'true';
-    }
-
-    // === ADDRESS BUILDING ===
-    if (!result.homeAddress && (result._street || result._city || result._state)) {
-      let street = result._street?.trim() || '';
-      let city = result._city?.trim() || '';
-      let state = result._state?.trim() || '';
-      let zip = result._zip?.trim() || '';
-
-      // Check for garbage address
-      if (street && GARBAGE_ADDRESS_PATTERNS.some(p => p.test(street))) {
-        street = '';
-      }
-
-      // Detect city in state column (common LimoAnywhere issue)
-      if (state && COMMON_CITIES.has(state.toLowerCase())) {
-        // "state" is actually a city, "zip" might be state
-        if (zip && US_STATES.has(zip.toUpperCase())) {
-          city = city || state;
-          state = zip;
-          zip = '';
-        } else {
-          city = city || state;
-          state = '';
+      // === NAME CLEANING (do this first so we can check again) ===
+      // Handle full name in firstName field
+      if (result.firstName?.includes(' ') && (!result.lastName || result.lastName.match(/^[\(&-]/))) {
+        const parts = result.firstName.split(/\s+/);
+        if (parts.length >= 2) {
+          result.firstName = parts[0];
+          result.lastName = parts.slice(1).join(' ');
         }
       }
 
-      // Normalize state to uppercase
-      if (state && US_STATES.has(state.toUpperCase())) {
-        state = state.toUpperCase();
+      // Clean lastName starting with special chars
+      if (result.lastName?.match(/^[\(&-\s]+/)) {
+        result.lastName = result.lastName.replace(/^[\(&-\s]+/, '').replace(/[\)]+$/, '').trim();
       }
 
-      // Build final address
-      const parts = [street, city, state, zip].filter(Boolean);
-      result.homeAddress = parts.join(', ');
-    }
+      // Mark non-person entries
+      if (result.firstName && NON_PERSON_NAMES.has(result.firstName.toLowerCase())) {
+        result._isBusinessEntry = 'true';
+      }
 
-    // === CLEANUP TEMP FIELDS ===
-    delete result._homePhone;
-    delete result._officePhone;
-    delete result._street;
-    delete result._city;
-    delete result._state;
-    delete result._zip;
-    delete result._country;
-    delete result._companyName;
+      // === PHONE FALLBACK + FORMATTING ===
+      let phoneToUse = result.mobilePhone?.trim() || '';
 
-    return result;
-  });
+      if (!phoneToUse) {
+        if (result._homePhone?.trim()) {
+          phoneToUse = result._homePhone;
+        } else if (result._officePhone?.trim()) {
+          phoneToUse = result._officePhone;
+        }
+      }
+
+      // Format the phone number if we have one, otherwise use placeholder
+      if (phoneToUse) {
+        result.mobilePhone = cleanPhoneNumber(phoneToUse);
+      } else {
+        result.mobilePhone = PLACEHOLDER_PHONE;
+      }
+
+      // === EMAIL: Take first if multiple ===
+      if (result.email?.includes(';')) {
+        const emails = result.email.split(';').map(e => e.trim()).filter(Boolean);
+        result.email = emails[0] || '';
+      }
+
+      // === ADDRESS BUILDING ===
+      if (!result.homeAddress && (result._street || result._city || result._state)) {
+        let street = result._street?.trim() || '';
+        let city = result._city?.trim() || '';
+        let state = result._state?.trim() || '';
+        let zip = result._zip?.trim() || '';
+
+        // Check for garbage address
+        if (street && GARBAGE_ADDRESS_PATTERNS.some(p => p.test(street))) {
+          street = '';
+        }
+
+        // Detect city in state column (common LimoAnywhere issue)
+        if (state && COMMON_CITIES.has(state.toLowerCase())) {
+          // "state" is actually a city, "zip" might be state
+          if (zip && US_STATES.has(zip.toUpperCase())) {
+            city = city || state;
+            state = zip;
+            zip = '';
+          } else {
+            city = city || state;
+            state = '';
+          }
+        }
+
+        // Normalize state to uppercase
+        if (state && US_STATES.has(state.toUpperCase())) {
+          state = state.toUpperCase();
+        }
+
+        // Build final address
+        const parts = [street, city, state, zip].filter(Boolean);
+        result.homeAddress = parts.join(', ');
+      }
+
+      // === CLEANUP TEMP FIELDS ===
+      delete result._homePhone;
+      delete result._officePhone;
+      delete result._street;
+      delete result._city;
+      delete result._state;
+      delete result._zip;
+      delete result._country;
+      delete result._companyName;
+
+      return result;
+    })
+    // Final filter: drop records that still don't have both first and last name after cleaning
+    .filter(row => {
+      const firstName = row.firstName?.trim();
+      const lastName = row.lastName?.trim();
+      return firstName && lastName;
+    });
 }
 
 // Auto-detect LimoAnywhere format from headers
