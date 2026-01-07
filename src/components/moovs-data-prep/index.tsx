@@ -307,8 +307,14 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
   const missingEmailCount = state.issues.filter(i => i.field.includes('email') || i.field.includes('Email')).filter(i => i.type === 'missing').length;
   const invalidPhoneCount = state.issues.filter(i => i.field.includes('phone') || i.field.includes('Phone')).filter(i => i.type === 'invalid').length;
-  const totalIssues = state.issues.length;
-  const readyCount = state.parsedData.length - new Set(state.issues.map(i => i.rowIndex)).size;
+
+  // Separate actual errors from informational notes
+  const errorIssues = state.issues.filter(i => i.type !== 'info');
+  const infoIssues = state.issues.filter(i => i.type === 'info');
+  const totalErrors = errorIssues.length;
+  const placeholderPhoneCount = infoIssues.filter(i => i.field.includes('phone') || i.field.includes('Phone')).length;
+
+  const readyCount = state.parsedData.length - new Set(errorIssues.map(i => i.rowIndex)).size;
 
   return (
     <div className={cn("min-h-screen bg-gray-50", className)}>
@@ -480,18 +486,23 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                   <p className="text-sm text-gray-900">Ready to Import</p>
                 </div>
                 <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                  <p className="text-3xl font-bold text-yellow-700">{totalIssues}</p>
-                  <p className="text-sm text-gray-900">Issues Found</p>
+                  <p className="text-3xl font-bold text-yellow-700">{totalErrors}</p>
+                  <p className="text-sm text-gray-900">Issues to Fix</p>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
                   <p className="text-3xl font-bold text-blue-700">{state.duplicates.length}</p>
                   <p className="text-sm text-gray-900">Duplicate Groups</p>
                 </div>
               </div>
+              {placeholderPhoneCount > 0 && (
+                <p className="mt-4 text-sm text-gray-600 text-center">
+                  ℹ️ {placeholderPhoneCount} contacts using placeholder phone (no phone was available in source data)
+                </p>
+              )}
             </div>
 
             {/* Issues breakdown */}
-            {totalIssues > 0 && (
+            {totalErrors > 0 && (
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Issues to Fix</h3>
@@ -524,7 +535,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                     </div>
                   )}
                   {Object.entries(issuesByType)
-                    .filter(([key]) => !key.includes('email') && !key.includes('Email') && !key.includes('phone') && !key.includes('Phone'))
+                    .filter(([key]) => !key.includes('email') && !key.includes('Email') && !key.includes('phone') && !key.includes('Phone') && !key.includes('info'))
                     .map(([key, count]) => (
                       <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div className="flex items-center gap-2">
@@ -538,7 +549,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             )}
 
             {/* Auto-fix button */}
-            {totalIssues > 0 && (
+            {totalErrors > 0 && (
               <button
                 onClick={autoFixIssues}
                 className="w-full py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium"
