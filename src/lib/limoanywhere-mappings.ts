@@ -298,89 +298,165 @@ function splitFullName(fullName: string | undefined): { firstName: string; lastN
   };
 }
 
-// Apply transformations specific to reservation data
-export function applyReservationTransforms(data: Record<string, string>[]): Record<string, string>[] {
-  return data.map(row => {
-    const result = { ...row };
+// Clean LimoAnywhere passenger name format: "Name | Description" → "Name"
+// Also handles formats like "Name (Company)" and strips non-person indicators
+function cleanPassengerName(rawName: string | undefined): string {
+  if (!rawName?.trim()) return '';
 
-    // === ORDER TYPE TRANSFORMATION ===
-    if (result.orderType) {
-      result.orderType = transformOrderType(result.orderType);
-    } else {
-      result.orderType = 'point-to-point';
-    }
+  let name = rawName.trim();
 
-    // === TOTAL GROUP SIZE DEFAULT ===
-    if (!result.totalGroupSize?.trim() || result.totalGroupSize === '0') {
-      result.totalGroupSize = '1';
-    }
+  // Extract name before pipe: "Jenny Fankhauser | Airport Greeter (PMI)" → "Jenny Fankhauser"
+  if (name.includes('|')) {
+    name = name.split('|')[0].trim();
+  }
 
-    // === SPLIT FULL NAMES ===
-    // Passenger/Trip contact from full name
-    if (result._passengerFullName && (!result.tripContactFirstName || !result.tripContactLastName)) {
-      const { firstName, lastName } = splitFullName(result._passengerFullName);
-      if (!result.tripContactFirstName) result.tripContactFirstName = firstName;
-      if (!result.tripContactLastName) result.tripContactLastName = lastName || firstName; // Use firstName as lastName if missing
-    }
+  // Remove trailing parenthetical: "John Smith (Company)" → "John Smith"
+  name = name.replace(/\s*\([^)]*\)\s*$/, '').trim();
 
-    // Booking contact from full name
-    if (result._bookingFullName && (!result.bookingContactFirstName || !result.bookingContactLastName)) {
-      const { firstName, lastName } = splitFullName(result._bookingFullName);
-      if (!result.bookingContactFirstName) result.bookingContactFirstName = firstName;
-      if (!result.bookingContactLastName) result.bookingContactLastName = lastName || firstName;
-    }
+  // Skip non-person entries (vehicles, services, notes)
+  const nonPersonIndicators = [
+    /^\d+[-\s]?\d*\s*(sprinter|sedan|suv|bus|van|coach|limo)/i,  // "12-14 Sprinters"
+    /^setra\b/i,           // Vehicle type
+    /^ford\b/i,            // Vehicle type
+    /^mercedes\b/i,        // Vehicle type
+    /^shuttle\b/i,         // Service type
+    /^butler\s+(office|seattle)/i,  // Internal entries
+    /^\d+%\s/,             // "25% HOLIDAY SURCHARGE"
+    /^airport\s+(arrival|greeter)/i, // Service descriptions without name
+    /^weddings?\s+in\b/i,  // Event descriptions
+  ];
 
-    // === COPY BOOKING TO TRIP IF TRIP IS MISSING ===
-    if (!result.tripContactFirstName && result.bookingContactFirstName) {
-      result.tripContactFirstName = result.bookingContactFirstName;
-    }
-    if (!result.tripContactLastName && result.bookingContactLastName) {
-      result.tripContactLastName = result.bookingContactLastName;
-    }
-    if (!result.tripContactEmail && result.bookingContactEmail) {
-      result.tripContactEmail = result.bookingContactEmail;
-    }
-    if (!result.tripContactPhoneNumber && result.bookingContactPhoneNumber) {
-      result.tripContactPhoneNumber = result.bookingContactPhoneNumber;
-    }
+  if (nonPersonIndicators.some(pattern => pattern.test(name))) {
+    return '';  // Not a person name
+  }
 
-    // === COPY TRIP TO BOOKING IF BOOKING IS MISSING ===
-    if (!result.bookingContactFirstName && result.tripContactFirstName) {
-      result.bookingContactFirstName = result.tripContactFirstName;
-    }
-    if (!result.bookingContactLastName && result.tripContactLastName) {
-      result.bookingContactLastName = result.tripContactLastName;
-    }
-    if (!result.bookingContactEmail && result.tripContactEmail) {
-      result.bookingContactEmail = result.tripContactEmail;
-    }
-    if (!result.bookingContactPhoneNumber && result.tripContactPhoneNumber) {
-      result.bookingContactPhoneNumber = result.tripContactPhoneNumber;
-    }
-
-    // === FORMAT PHONE NUMBERS ===
-    if (result.bookingContactPhoneNumber) {
-      result.bookingContactPhoneNumber = cleanPhoneNumber(result.bookingContactPhoneNumber) || PLACEHOLDER_PHONE;
-    } else {
-      result.bookingContactPhoneNumber = PLACEHOLDER_PHONE;
-    }
-
-    if (result.tripContactPhoneNumber) {
-      result.tripContactPhoneNumber = cleanPhoneNumber(result.tripContactPhoneNumber) || PLACEHOLDER_PHONE;
-    } else {
-      result.tripContactPhoneNumber = PLACEHOLDER_PHONE;
-    }
-
-    // === CLEANUP TEMP FIELDS ===
-    delete result._passengerFullName;
-    delete result._bookingFullName;
-
-    return result;
-  });
+  return name;
 }
 
-// Phone fallback placeholder
-export const PLACEHOLDER_PHONE = '+1 555-555-5555';
+// Generate a placeholder email from name
+function generateReservationPlaceholderEmail(firstName: string, lastName: string): string {
+  if (!firstName || !lastName) return '';
+  const cleanFirst = firstName.toLowerCase().replace(/[^a-z]/g, '');
+  const cleanLast = lastName.toLowerCase().replace(/[^a-z]/g, '');
+  if (!cleanFirst || !cleanLast) return '';
+  return `${cleanFirst}.${cleanLast}@placeholder.moovs.com`;
+}
+
+// Apply transformations specific to reservation data
+export function applyReservationTransforms(data: Record<string, string>[]): Record<string, string>[] {
+  return data
+    .map(row => {
+      const result = { ...row };
+
+      // === ORDER TYPE TRANSFORMATION ===
+      if (result.orderType) {
+        result.orderType = transformOrderType(result.orderType);
+      } else {
+        result.orderType = 'point-to-point';
+      }
+
+      // === TOTAL GROUP SIZE DEFAULT ===
+      if (!result.totalGroupSize?.trim() || result.totalGroupSize === '0') {
+        result.totalGroupSize = '1';
+      }
+
+      // === CLEAN AND SPLIT FULL NAMES ===
+      // Clean passenger name format first (handles "Name | Description" format)
+      if (result._passengerFullName) {
+        result._passengerFullName = cleanPassengerName(result._passengerFullName);
+      }
+      if (result._bookingFullName) {
+        // Booking contact is usually cleaner but still clean it
+        result._bookingFullName = cleanPassengerName(result._bookingFullName);
+      }
+
+      // Passenger/Trip contact from full name
+      if (result._passengerFullName && (!result.tripContactFirstName || !result.tripContactLastName)) {
+        const { firstName, lastName } = splitFullName(result._passengerFullName);
+        if (!result.tripContactFirstName) result.tripContactFirstName = firstName;
+        if (!result.tripContactLastName) result.tripContactLastName = lastName || firstName;
+      }
+
+      // Booking contact from full name
+      if (result._bookingFullName && (!result.bookingContactFirstName || !result.bookingContactLastName)) {
+        const { firstName, lastName } = splitFullName(result._bookingFullName);
+        if (!result.bookingContactFirstName) result.bookingContactFirstName = firstName;
+        if (!result.bookingContactLastName) result.bookingContactLastName = lastName || firstName;
+      }
+
+      // === COPY BOOKING TO TRIP IF TRIP IS MISSING ===
+      if (!result.tripContactFirstName && result.bookingContactFirstName) {
+        result.tripContactFirstName = result.bookingContactFirstName;
+      }
+      if (!result.tripContactLastName && result.bookingContactLastName) {
+        result.tripContactLastName = result.bookingContactLastName;
+      }
+      if (!result.tripContactEmail && result.bookingContactEmail) {
+        result.tripContactEmail = result.bookingContactEmail;
+      }
+      if (!result.tripContactPhoneNumber && result.bookingContactPhoneNumber) {
+        result.tripContactPhoneNumber = result.bookingContactPhoneNumber;
+      }
+
+      // === COPY TRIP TO BOOKING IF BOOKING IS MISSING ===
+      if (!result.bookingContactFirstName && result.tripContactFirstName) {
+        result.bookingContactFirstName = result.tripContactFirstName;
+      }
+      if (!result.bookingContactLastName && result.tripContactLastName) {
+        result.bookingContactLastName = result.tripContactLastName;
+      }
+      if (!result.bookingContactEmail && result.tripContactEmail) {
+        result.bookingContactEmail = result.tripContactEmail;
+      }
+      if (!result.bookingContactPhoneNumber && result.tripContactPhoneNumber) {
+        result.bookingContactPhoneNumber = result.tripContactPhoneNumber;
+      }
+
+      // === GENERATE PLACEHOLDER EMAILS IF MISSING ===
+      if (!result.bookingContactEmail && result.bookingContactFirstName && result.bookingContactLastName) {
+        result.bookingContactEmail = generateReservationPlaceholderEmail(
+          result.bookingContactFirstName,
+          result.bookingContactLastName
+        );
+      }
+      if (!result.tripContactEmail && result.tripContactFirstName && result.tripContactLastName) {
+        result.tripContactEmail = generateReservationPlaceholderEmail(
+          result.tripContactFirstName,
+          result.tripContactLastName
+        );
+      }
+
+      // === FORMAT PHONE NUMBERS ===
+      if (result.bookingContactPhoneNumber) {
+        result.bookingContactPhoneNumber = cleanPhoneNumber(result.bookingContactPhoneNumber) || PLACEHOLDER_PHONE;
+      } else {
+        result.bookingContactPhoneNumber = PLACEHOLDER_PHONE;
+      }
+
+      if (result.tripContactPhoneNumber) {
+        result.tripContactPhoneNumber = cleanPhoneNumber(result.tripContactPhoneNumber) || PLACEHOLDER_PHONE;
+      } else {
+        result.tripContactPhoneNumber = PLACEHOLDER_PHONE;
+      }
+
+      // === CLEANUP TEMP FIELDS ===
+      delete result._passengerFullName;
+      delete result._bookingFullName;
+
+      return result;
+    })
+    // Filter out entries without valid contact names (internal/placeholder entries)
+    .filter(row => {
+      // Must have at least booking contact names
+      const hasBookingName = row.bookingContactFirstName?.trim() && row.bookingContactLastName?.trim();
+      const hasTripName = row.tripContactFirstName?.trim() && row.tripContactLastName?.trim();
+      return hasBookingName || hasTripName;
+    });
+}
+
+// Phone fallback placeholder - uses reserved 555-01XX range with valid area code
+// 202 (Washington DC) + 555-0100 is officially reserved for fictional/test use
+export const PLACEHOLDER_PHONE = '+1 202-555-0100';
 
 // US State codes for validation
 const US_STATES = new Set([

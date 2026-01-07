@@ -12,6 +12,12 @@ function isPlaceholderPhone(phone: string | undefined): boolean {
   return normalizedPhone === normalizedPlaceholder;
 }
 
+// Check if an email is a placeholder email
+function isPlaceholderEmail(email: string | undefined): boolean {
+  if (!email) return false;
+  return email.endsWith('@placeholder.moovs.com');
+}
+
 // Validate contact data
 export function validateContacts(
   data: Record<string, string>[],
@@ -278,6 +284,15 @@ function validateContactFields(
       type: 'missing',
       message: `${prefix === 'bookingContact' ? 'Booking' : 'Trip'} contact email is required`,
       suggestedValue: suggestedEmail,
+    });
+  } else if (isPlaceholderEmail(email)) {
+    // Placeholder email is valid but informational - not an error
+    issues.push({
+      rowIndex: index,
+      field: `${prefix}Email`,
+      type: 'info',
+      message: `${prefix === 'bookingContact' ? 'Booking' : 'Trip'} contact using placeholder email`,
+      currentValue: email,
     });
   } else {
     const emailResult = validateEmail(email);
