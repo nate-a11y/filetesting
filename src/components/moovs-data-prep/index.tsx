@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import type { WorkflowType, FormatType, ColumnMapping, DataIssue, DuplicateGroup, WorkflowState } from '@/types/schemas';
 import { parseCSV, applyMappings, generateCSV, downloadCSV, CONTACT_HEADERS, RESERVATION_HEADERS } from '@/lib/csv-utils';
-import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, applyPhoneFallback } from '@/lib/limoanywhere-mappings';
+import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
 import { validateContacts, validateReservations, detectDuplicates } from '@/lib/validation';
 import { generatePlaceholderEmail } from '@/lib/email-utils';
 import { cn } from '@/lib/cn';
@@ -158,14 +158,20 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
     try {
       let parsed = applyMappings(headers, rawData, mappings);
-      const countBeforePhoneFallback = parsed.length;
+      const countBeforeTransforms = parsed.length;
 
-      // Apply phone fallback logic + name cleaning + drop records without names
-      parsed = applyPhoneFallback(parsed);
+      // Apply workflow-specific transformations
+      if (state.workflow === 'contacts') {
+        // Contact workflow: phone fallback + name cleaning + drop records without names
+        parsed = applyPhoneFallback(parsed);
+      } else {
+        // Reservation workflow: orderType mapping, name splitting, defaults
+        parsed = applyReservationTransforms(parsed);
+      }
 
-      // Track dropped rows (records without first/last name)
-      const droppedCount = countBeforePhoneFallback - parsed.length;
-      if (totalRowsBeforeCleaning !== undefined) {
+      // Track dropped rows (only applies to contacts)
+      const droppedCount = countBeforeTransforms - parsed.length;
+      if (totalRowsBeforeCleaning !== undefined && droppedCount > 0) {
         setUploadStats(prev => prev ? {
           ...prev,
           droppedRows: droppedCount,
