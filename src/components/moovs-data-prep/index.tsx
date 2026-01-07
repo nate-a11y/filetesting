@@ -261,7 +261,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Moovs Data Prep</h1>
-          <p className="text-gray-600 mt-2">Prepare your data for import into Moovs via OneSchema</p>
+          <p className="text-gray-700 mt-2">Prepare your data for import into Moovs via OneSchema</p>
         </div>
 
         {/* Operator ID Input */}
@@ -275,7 +275,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               value={state.operatorId}
               onChange={(e) => setState(prev => ({ ...prev, operatorId: e.target.value }))}
               placeholder="Enter your operator ID"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder:text-gray-500 bg-white"
             />
           </div>
         )}
@@ -285,13 +285,13 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
           <div className="mb-6 flex items-center gap-2">
             <button
               onClick={resetWorkflow}
-              className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+              className="flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900"
             >
               <ArrowLeft className="w-4 h-4" />
               Start Over
             </button>
-            <span className="text-gray-400">|</span>
-            <span className="text-sm text-gray-600">
+            <span className="text-gray-500" aria-hidden="true">|</span>
+            <span className="text-sm text-gray-700">
               {state.workflow === 'contacts' ? 'Contacts' : 'Reservations'}
               {state.format && ` / ${state.format === 'limoanywhere' ? 'LimoAnywhere' : 'Custom'}`}
             </span>
@@ -315,25 +315,32 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             <button
               onClick={() => selectWorkflow('contacts')}
               disabled={!state.operatorId}
-              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left disabled:bg-gray-100 disabled:border-gray-300 disabled:cursor-not-allowed"
+              aria-describedby={!state.operatorId ? "operator-required" : undefined}
             >
-              <Users className="w-12 h-12 text-blue-500 mb-4" />
+              <Users className="w-12 h-12 text-blue-500 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">Contacts</h2>
-              <p className="text-gray-600 mt-2">
+              <p className="text-gray-700 mt-2">
                 Clean up your contact list - fix missing emails, invalid phones, and detect duplicates.
               </p>
             </button>
             <button
               onClick={() => selectWorkflow('reservations')}
               disabled={!state.operatorId}
-              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left disabled:bg-gray-100 disabled:border-gray-300 disabled:cursor-not-allowed"
+              aria-describedby={!state.operatorId ? "operator-required" : undefined}
             >
-              <Calendar className="w-12 h-12 text-green-500 mb-4" />
+              <Calendar className="w-12 h-12 text-green-500 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">Reservations</h2>
-              <p className="text-gray-600 mt-2">
+              <p className="text-gray-700 mt-2">
                 Clean up your trip history - fix dates, addresses, and contact information.
               </p>
             </button>
+            {!state.operatorId && (
+              <p id="operator-required" className="col-span-2 text-sm text-gray-700 text-center">
+                Enter your Operator ID above to continue
+              </p>
+            )}
           </div>
         )}
 
@@ -344,9 +351,9 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               onClick={() => selectFormat('limoanywhere')}
               className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left"
             >
-              <FileSpreadsheet className="w-12 h-12 text-purple-500 mb-4" />
+              <FileSpreadsheet className="w-12 h-12 text-purple-600 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">LimoAnywhere</h2>
-              <p className="text-gray-600 mt-2">
+              <p className="text-gray-700 mt-2">
                 Auto-mapped columns for LimoAnywhere exports. Just upload and fix issues.
               </p>
             </button>
@@ -354,9 +361,9 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               onClick={() => selectFormat('custom')}
               className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left"
             >
-              <FileSpreadsheet className="w-12 h-12 text-orange-500 mb-4" />
+              <FileSpreadsheet className="w-12 h-12 text-orange-600 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">Custom Format</h2>
-              <p className="text-gray-600 mt-2">
+              <p className="text-gray-700 mt-2">
                 Map your columns to Moovs fields manually. Works with any CSV export.
               </p>
             </button>
@@ -392,15 +399,15 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center p-4 bg-green-50 rounded-lg">
                   <p className="text-3xl font-bold text-green-600">{readyCount}</p>
-                  <p className="text-sm text-gray-600">Ready to Import</p>
+                  <p className="text-sm text-gray-700">Ready to Import</p>
                 </div>
                 <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                  <p className="text-3xl font-bold text-yellow-600">{totalIssues}</p>
-                  <p className="text-sm text-gray-600">Issues Found</p>
+                  <p className="text-3xl font-bold text-yellow-700">{totalIssues}</p>
+                  <p className="text-sm text-gray-700">Issues Found</p>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <p className="text-3xl font-bold text-blue-600">{state.duplicates.length}</p>
-                  <p className="text-sm text-gray-600">Duplicate Groups</p>
+                  <p className="text-3xl font-bold text-blue-700">{state.duplicates.length}</p>
+                  <p className="text-sm text-gray-700">Duplicate Groups</p>
                 </div>
               </div>
             </div>
@@ -552,7 +559,7 @@ function FileUploader({
       {isProcessing ? (
         <div className="flex flex-col items-center">
           <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-600">Processing file...</p>
+          <p className="text-gray-700">Processing file...</p>
         </div>
       ) : (
         <>
@@ -604,7 +611,7 @@ function ColumnMapper({
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
       <h2 className="text-xl font-semibold text-gray-900">Map Your Columns</h2>
-      <p className="text-gray-600">
+      <p className="text-gray-700">
         Match your CSV columns to the Moovs fields. Required fields are marked with *.
       </p>
 
@@ -720,17 +727,17 @@ function DataPreview({
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+            className="px-3 py-1 text-sm text-gray-700 hover:text-gray-900 disabled:text-gray-500 disabled:cursor-not-allowed"
           >
             Previous
           </button>
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-700">
             Page {page + 1} of {totalPages}
           </span>
           <button
             onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
             disabled={page === totalPages - 1}
-            className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+            className="px-3 py-1 text-sm text-gray-700 hover:text-gray-900 disabled:text-gray-500 disabled:cursor-not-allowed"
           >
             Next
           </button>
