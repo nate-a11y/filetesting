@@ -82,11 +82,11 @@ export interface ColumnMapping {
   combineWith?: string[];
 }
 
-// Issue types
+// Issue types - 'info' is for informational notes that don't require action
 export interface DataIssue {
   rowIndex: number;
   field: string;
-  type: 'missing' | 'invalid' | 'duplicate';
+  type: 'missing' | 'invalid' | 'duplicate' | 'info';
   message: string;
   currentValue?: string;
   suggestedValue?: string;

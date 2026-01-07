@@ -404,8 +404,31 @@ const COMMON_CITIES = new Set([
 const NON_PERSON_NAMES = new Set([
   'payable', 'billing', 'accounts', 'receivable', 'shuttle', 'bus',
   'van', 'driver', 'office', 'admin', 'dispatch', 'reservation',
-  'reservations', 'booking', 'bookings', 'fleet', 'maintenance'
+  'reservations', 'booking', 'bookings', 'fleet', 'maintenance',
+  'operations', 'corporate', 'company', 'business', 'sales', 'marketing',
+  'accounting', 'finance', 'hr', 'human', 'resources', 'support',
+  'customer', 'service', 'transportation', 'logistics', 'purchasing',
+  'vip', 'client', 'guest', 'visitor', 'member', 'special', 'test',
+  'demo', 'sample', 'unknown', 'anonymous', 'n/a', 'na', 'none'
 ]);
+
+// VIP/Client patterns that indicate a placeholder entry
+const PLACEHOLDER_NAME_PATTERNS = [
+  /^vip\s+(client|guest|customer|member)/i,  // "VIP Client", "VIP Guest"
+  /^special\s+(guest|client|customer)/i,     // "Special Guest"
+  /^test\s+/i,                                // "Test User", "Test Account"
+  /^demo\s+/i,                                // "Demo Account"
+  /^(no|not)\s+(name|available)/i,           // "No Name", "Not Available"
+];
+
+// Wedding-related patterns in lastName that indicate an event entry, not a person
+const WEDDING_PATTERNS = [
+  /\bwedding\b/i,           // Contains "wedding"
+  /\bwedding\s+shuttle\b/i, // "Wedding Shuttle"
+  /\breception\b/i,         // Contains "reception"
+  /\bceremony\b/i,          // Contains "ceremony"
+  /\brehearsal\b/i,         // Contains "rehearsal"
+];
 
 // Garbage address patterns
 const GARBAGE_ADDRESS_PATTERNS = [
@@ -481,9 +504,55 @@ function cleanPhoneNumber(phone: string | undefined): string {
   return cleaned;
 }
 
+// Normalize a value for duplicate comparison
+function normalizeForComparison(value: string | undefined): string {
+  if (!value) return '';
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Deduplicate contacts based on email, phone, or name
+function deduplicateContacts(data: Record<string, string>[]): Record<string, string>[] {
+  const seenEmails = new Set<string>();
+  const seenPhones = new Set<string>();
+  const seenNames = new Set<string>();
+  const placeholderPhone = normalizeForComparison(PLACEHOLDER_PHONE);
+
+  return data.filter(row => {
+    const email = normalizeForComparison(row.email);
+    const phone = normalizeForComparison(row.mobilePhone);
+    const name = normalizeForComparison(`${row.firstName}${row.lastName}`);
+
+    // Check for duplicates - email takes priority (skip empty emails)
+    if (email) {
+      if (seenEmails.has(email)) {
+        return false; // Duplicate email
+      }
+      seenEmails.add(email);
+    }
+
+    // Check phone (only if not placeholder)
+    if (phone && phone !== placeholderPhone) {
+      if (seenPhones.has(phone)) {
+        return false; // Duplicate phone
+      }
+      seenPhones.add(phone);
+    }
+
+    // Check name combination (as final check)
+    if (name) {
+      if (seenNames.has(name)) {
+        return false; // Duplicate name
+      }
+      seenNames.add(name);
+    }
+
+    return true;
+  });
+}
+
 // Apply all data transformations
 export function applyPhoneFallback(data: Record<string, string>[]): Record<string, string>[] {
-  return data
+  const cleaned = data
     // First, filter out records with no first AND last name
     .filter(row => {
       const firstName = row.firstName?.trim();
@@ -537,6 +606,14 @@ export function applyPhoneFallback(data: Record<string, string>[]): Record<strin
 
       // === NAME CLEANING (do this first so we can check again) ===
 
+      // Clean pipe characters from names (e.g., "Garson |" → "Garson")
+      if (result.firstName) {
+        result.firstName = result.firstName.replace(/\s*\|\s*$/, '').trim();
+      }
+      if (result.lastName) {
+        result.lastName = result.lastName.replace(/\s*\|\s*$/, '').trim();
+      }
+
       // Handle wedding couple names like "Stephanie Schwarzmiller and James Plecensia"
       // Take only the first person's name
       if (result.firstName?.toLowerCase().includes(' and ')) {
@@ -558,8 +635,33 @@ export function applyPhoneFallback(data: Record<string, string>[]): Record<strin
         result.lastName = result.lastName.replace(/^[\(&-\s]+/, '').replace(/[\)]+$/, '').trim();
       }
 
-      // Mark non-person entries
+      // Handle wedding-related last names (e.g., "Thompson Wedding", "Sturtevant and Vrooman Wedding")
+      // These are event entries, not person names - mark for filtering
+      if (result.lastName && WEDDING_PATTERNS.some(p => p.test(result.lastName!))) {
+        // Try to extract just the last name before "Wedding" or mark as business entry
+        const beforeWedding = result.lastName.replace(/\s+(and\s+\w+\s+)?wedding.*$/i, '').trim();
+        if (beforeWedding && beforeWedding !== result.lastName && !beforeWedding.includes(' ')) {
+          // We extracted a clean last name (e.g., "Thompson Wedding" → "Thompson")
+          result.lastName = beforeWedding;
+        } else {
+          // Complex case like "Sturtevant and Vrooman Wedding" - mark as business/event entry
+          result._isBusinessEntry = 'true';
+        }
+      }
+
+      // Check for VIP/placeholder patterns in the full name
+      const fullName = `${result.firstName || ''} ${result.lastName || ''}`.trim();
+      if (PLACEHOLDER_NAME_PATTERNS.some(p => p.test(fullName))) {
+        result._isBusinessEntry = 'true';
+      }
+
+      // Mark non-person entries based on first name
       if (result.firstName && NON_PERSON_NAMES.has(result.firstName.toLowerCase())) {
+        result._isBusinessEntry = 'true';
+      }
+
+      // Also check if lastName alone is a non-person indicator
+      if (result.lastName && NON_PERSON_NAMES.has(result.lastName.toLowerCase())) {
         result._isBusinessEntry = 'true';
       }
 
@@ -634,12 +736,21 @@ export function applyPhoneFallback(data: Record<string, string>[]): Record<strin
 
       return result;
     })
-    // Final filter: drop records that still don't have both first and last name after cleaning
+    // Final filter: drop records that don't have both first and last name, or are business/event entries
     .filter(row => {
       const firstName = row.firstName?.trim();
       const lastName = row.lastName?.trim();
-      return firstName && lastName;
+      const isBusinessEntry = row._isBusinessEntry === 'true';
+
+      // Drop the _isBusinessEntry flag before export
+      delete row._isBusinessEntry;
+
+      // Keep only records with both names and that aren't business entries
+      return firstName && lastName && !isBusinessEntry;
     });
+
+  // Apply deduplication as final step
+  return deduplicateContacts(cleaned);
 }
 
 // Auto-detect LimoAnywhere format from headers
