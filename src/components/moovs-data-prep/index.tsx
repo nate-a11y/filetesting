@@ -7,6 +7,7 @@ import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, autoM
 import { validateContacts, validateReservations, detectDuplicates } from '@/lib/validation';
 import { generatePlaceholderEmail } from '@/lib/email-utils';
 import { cn } from '@/lib/cn';
+import { DuplicateMerger } from './DuplicateMerger';
 import {
   Upload,
   FileSpreadsheet,
@@ -288,6 +289,71 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
     });
   };
 
+  // Resolve a single duplicate group (keep one record, remove others)
+  const resolveDuplicate = (groupIndex: number, keepIndex: number) => {
+    const group = state.duplicates[groupIndex];
+    if (!group) return;
+
+    // Get row indices to remove (all except the one we're keeping)
+    const indicesToRemove = new Set(
+      group.contacts
+        .filter((_, i) => i !== keepIndex)
+        .map(c => c.rowIndex)
+    );
+
+    setState(prev => {
+      // Filter out the removed rows
+      const newParsedData = prev.parsedData.filter((_, index) => !indicesToRemove.has(index));
+
+      // Re-detect duplicates with updated data
+      const newDuplicates = detectDuplicates(newParsedData);
+
+      // Re-validate
+      const { validatedData, issues } = prev.workflow === 'contacts'
+        ? validateContacts(newParsedData, prev.operatorId)
+        : validateReservations(newParsedData, prev.operatorId);
+
+      return {
+        ...prev,
+        parsedData: validatedData,
+        issues,
+        duplicates: newDuplicates,
+      };
+    });
+  };
+
+  // Resolve all duplicate groups at once
+  const resolveAllDuplicates = (decisions: { groupIndex: number; keepIndex: number }[]) => {
+    // Collect all row indices to remove
+    const indicesToRemove = new Set<number>();
+
+    decisions.forEach(({ groupIndex, keepIndex }) => {
+      const group = state.duplicates[groupIndex];
+      if (group) {
+        group.contacts
+          .filter((_, i) => i !== keepIndex)
+          .forEach(c => indicesToRemove.add(c.rowIndex));
+      }
+    });
+
+    setState(prev => {
+      // Filter out the removed rows
+      const newParsedData = prev.parsedData.filter((_, index) => !indicesToRemove.has(index));
+
+      // Re-validate
+      const { validatedData, issues } = prev.workflow === 'contacts'
+        ? validateContacts(newParsedData, prev.operatorId)
+        : validateReservations(newParsedData, prev.operatorId);
+
+      return {
+        ...prev,
+        parsedData: validatedData,
+        issues,
+        duplicates: [], // All resolved
+      };
+    });
+  };
+
   // Export CSV
   const exportCSV = () => {
     const headers = state.workflow === 'contacts' ? CONTACT_HEADERS : RESERVATION_HEADERS;
@@ -297,6 +363,58 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
       : `moovs-reservations-${Date.now()}.csv`;
     downloadCSV(csv, filename);
   };
+
+  // Extract unique contacts from reservations (for separate contacts CSV)
+  const extractContactsFromReservations = useCallback(() => {
+    if (state.workflow !== 'reservations') return [];
+
+    const contactMap = new Map<string, Record<string, string>>();
+
+    state.parsedData.forEach(row => {
+      // Extract booking contact
+      if (row.bookingContactFirstName && row.bookingContactLastName) {
+        const key = `${row.bookingContactFirstName.toLowerCase()}-${row.bookingContactLastName.toLowerCase()}-${row.bookingContactEmail?.toLowerCase() || ''}-${row.bookingContactPhoneNumber?.replace(/\D/g, '') || ''}`;
+        if (!contactMap.has(key)) {
+          contactMap.set(key, {
+            operatorId: row.operatorId || state.operatorId,
+            firstName: row.bookingContactFirstName,
+            lastName: row.bookingContactLastName,
+            email: row.bookingContactEmail || '',
+            mobilePhone: row.bookingContactPhoneNumber || '',
+          });
+        }
+      }
+
+      // Extract trip contact (if different from booking)
+      if (row.tripContactFirstName && row.tripContactLastName) {
+        const key = `${row.tripContactFirstName.toLowerCase()}-${row.tripContactLastName.toLowerCase()}-${row.tripContactEmail?.toLowerCase() || ''}-${row.tripContactPhoneNumber?.replace(/\D/g, '') || ''}`;
+        if (!contactMap.has(key)) {
+          contactMap.set(key, {
+            operatorId: row.operatorId || state.operatorId,
+            firstName: row.tripContactFirstName,
+            lastName: row.tripContactLastName,
+            email: row.tripContactEmail || '',
+            mobilePhone: row.tripContactPhoneNumber || '',
+          });
+        }
+      }
+    });
+
+    return Array.from(contactMap.values());
+  }, [state.parsedData, state.workflow, state.operatorId]);
+
+  // Export contacts extracted from reservations
+  const exportContactsFromReservations = () => {
+    const contacts = extractContactsFromReservations();
+    if (contacts.length === 0) return;
+
+    const csv = generateCSV(contacts, CONTACT_HEADERS);
+    const filename = `moovs-new-contacts-${Date.now()}.csv`;
+    downloadCSV(csv, filename);
+  };
+
+  // Count of unique contacts in reservations
+  const uniqueContactsCount = state.workflow === 'reservations' ? extractContactsFromReservations().length : 0;
 
   // Count issues by type
   const issuesByType = state.issues.reduce((acc, issue) => {
@@ -548,6 +666,15 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               </div>
             )}
 
+            {/* Duplicate Merger */}
+            {state.duplicates.length > 0 && (
+              <DuplicateMerger
+                duplicates={state.duplicates}
+                onResolve={resolveDuplicate}
+                onResolveAll={resolveAllDuplicates}
+              />
+            )}
+
             {/* Auto-fix button */}
             {totalErrors > 0 && (
               <button
@@ -559,20 +686,44 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             )}
 
             {/* Preview and Export */}
-            <div className="flex gap-4">
-              <button
-                onClick={() => setState(prev => ({ ...prev, step: 'preview' }))}
-                className="flex-1 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium"
-              >
-                Preview Data
-              </button>
-              <button
-                onClick={exportCSV}
-                className="flex-1 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
-              >
-                <Download className="w-5 h-5" />
-                Export CSV for OneSchema
-              </button>
+            <div className="space-y-4">
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setState(prev => ({ ...prev, step: 'preview' }))}
+                  className="flex-1 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium"
+                >
+                  Preview Data
+                </button>
+                <button
+                  onClick={exportCSV}
+                  className="flex-1 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
+                >
+                  <Download className="w-5 h-5" />
+                  {state.workflow === 'contacts' ? 'Export Contacts CSV' : 'Export Reservations CSV'}
+                </button>
+              </div>
+
+              {/* Additional export for contacts from reservations */}
+              {state.workflow === 'reservations' && uniqueContactsCount > 0 && (
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">New Contacts to Create</p>
+                      <p className="text-sm text-gray-600">
+                        {uniqueContactsCount} unique contacts found in reservations.
+                        Import these to Moovs first to avoid duplicates.
+                      </p>
+                    </div>
+                    <button
+                      onClick={exportContactsFromReservations}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium flex items-center gap-2"
+                    >
+                      <Users className="w-4 h-4" />
+                      Export Contacts CSV
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -594,13 +745,26 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               headers={state.workflow === 'contacts' ? CONTACT_HEADERS : RESERVATION_HEADERS}
               issues={state.issues}
             />
-            <button
-              onClick={exportCSV}
-              className="w-full py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
-            >
-              <Download className="w-5 h-5" />
-              Export CSV for OneSchema
-            </button>
+            <div className="space-y-4">
+              <button
+                onClick={exportCSV}
+                className="w-full py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
+              >
+                <Download className="w-5 h-5" />
+                {state.workflow === 'contacts' ? 'Export Contacts CSV' : 'Export Reservations CSV'}
+              </button>
+
+              {/* Additional export for contacts from reservations */}
+              {state.workflow === 'reservations' && uniqueContactsCount > 0 && (
+                <button
+                  onClick={exportContactsFromReservations}
+                  className="w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium flex items-center justify-center gap-2"
+                >
+                  <Users className="w-5 h-5" />
+                  Export New Contacts CSV ({uniqueContactsCount} contacts)
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

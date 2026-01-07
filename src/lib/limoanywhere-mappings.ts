@@ -333,13 +333,31 @@ function cleanPassengerName(rawName: string | undefined): string {
   return name;
 }
 
-// Generate a placeholder email from name
-function generateReservationPlaceholderEmail(firstName: string, lastName: string): string {
+// Generate a deterministic placeholder email from name and phone
+// Format: robert.johnson.310923@import.moovs.com
+function generateReservationPlaceholderEmail(firstName: string, lastName: string, phone?: string): string {
   if (!firstName || !lastName) return '';
   const cleanFirst = firstName.toLowerCase().replace(/[^a-z]/g, '');
   const cleanLast = lastName.toLowerCase().replace(/[^a-z]/g, '');
   if (!cleanFirst || !cleanLast) return '';
-  return `${cleanFirst}.${cleanLast}@placeholder.moovs.com`;
+
+  // Use phone digits for uniqueness (same person = same email)
+  let suffix = '';
+  if (phone) {
+    const digits = phone.replace(/\D/g, '');
+    suffix = `.${digits.slice(-6) || '000000'}`;
+  } else {
+    // Generate deterministic hash from name
+    const seed = `${cleanFirst}${cleanLast}`;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+      hash = hash & hash;
+    }
+    suffix = `.${Math.abs(hash).toString().slice(0, 6).padStart(6, '0')}`;
+  }
+
+  return `${cleanFirst}.${cleanLast}${suffix}@import.moovs.com`;
 }
 
 // Apply transformations specific to reservation data
@@ -413,16 +431,19 @@ export function applyReservationTransforms(data: Record<string, string>[]): Reco
       }
 
       // === GENERATE PLACEHOLDER EMAILS IF MISSING ===
+      // Use phone number in email generation for deterministic uniqueness
       if (!result.bookingContactEmail && result.bookingContactFirstName && result.bookingContactLastName) {
         result.bookingContactEmail = generateReservationPlaceholderEmail(
           result.bookingContactFirstName,
-          result.bookingContactLastName
+          result.bookingContactLastName,
+          result.bookingContactPhoneNumber
         );
       }
       if (!result.tripContactEmail && result.tripContactFirstName && result.tripContactLastName) {
         result.tripContactEmail = generateReservationPlaceholderEmail(
           result.tripContactFirstName,
-          result.tripContactLastName
+          result.tripContactLastName,
+          result.tripContactPhoneNumber
         );
       }
 
