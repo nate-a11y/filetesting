@@ -413,6 +413,51 @@ const GARBAGE_ADDRESS_PATTERNS = [
   /^n\/?a$/i, /^unknown$/i, /^pending$/i, /restaurant\s+in\s+/i
 ];
 
+// Detect if a value looks like a phone number
+function looksLikePhone(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  const cleaned = value.trim();
+  // Phone number patterns: starts with +, or is 10-11 digits, or formatted like xxx-xxx-xxxx
+  if (cleaned.startsWith('+')) return true;
+  const digitsOnly = cleaned.replace(/\D/g, '');
+  if (digitsOnly.length >= 10 && digitsOnly.length <= 15) return true;
+  if (/^\d{3}[-.\s]?\d{3}[-.\s]?\d{4}$/.test(cleaned)) return true;
+  return false;
+}
+
+// Detect if a value looks like an email
+function looksLikeEmail(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+// Detect if a value looks like a zip code (5 digits or 5+4)
+function looksLikeZip(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  return /^\d{5}(-\d{4})?$/.test(value.trim());
+}
+
+// Try to find an email in any field of the row
+function findEmailInRow(row: Record<string, string>): string | null {
+  for (const [key, value] of Object.entries(row)) {
+    if (value && looksLikeEmail(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
+// Try to find a phone number in any field of the row
+function findPhoneInRow(row: Record<string, string>, excludeField?: string): string | null {
+  for (const [key, value] of Object.entries(row)) {
+    if (key === excludeField) continue;
+    if (value && looksLikePhone(value) && !looksLikeEmail(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
 // Format and clean a phone number - returns formatted number or placeholder if invalid
 function cleanPhoneNumber(phone: string | undefined): string {
   if (!phone?.trim()) return '';
@@ -450,7 +495,55 @@ export function applyPhoneFallback(data: Record<string, string>[]): Record<strin
     .map(row => {
       const result = { ...row };
 
+      // === COLUMN MISALIGNMENT RECOVERY ===
+      // LimoAnywhere exports often have unquoted commas in addresses which shifts all columns
+
+      // Check if email field has a phone number (column shift indicator)
+      if (looksLikePhone(result.email) && !looksLikeEmail(result.email)) {
+        // The "email" is actually a phone - try to find real email elsewhere
+        const realEmail = findEmailInRow(result);
+        const phoneFromEmail = result.email;
+
+        if (realEmail) {
+          result.email = realEmail;
+        } else {
+          result.email = ''; // Will be filled with placeholder later
+        }
+
+        // Use the phone we found if we don't have one
+        if (!result.mobilePhone || looksLikeZip(result.mobilePhone)) {
+          result.mobilePhone = phoneFromEmail;
+        }
+      }
+
+      // Check if phone field has a zip code (another column shift indicator)
+      if (looksLikeZip(result.mobilePhone)) {
+        // Try to find real phone in other fields
+        const realPhone = findPhoneInRow(result, 'mobilePhone');
+        if (realPhone) {
+          result.mobilePhone = realPhone;
+        } else {
+          result.mobilePhone = ''; // Will fall back to placeholder
+        }
+      }
+
+      // Also check _homePhone and _officePhone for zip codes
+      if (looksLikeZip(result._homePhone)) {
+        result._homePhone = '';
+      }
+      if (looksLikeZip(result._officePhone)) {
+        result._officePhone = '';
+      }
+
       // === NAME CLEANING (do this first so we can check again) ===
+
+      // Handle wedding couple names like "Stephanie Schwarzmiller and James Plecensia"
+      // Take only the first person's name
+      if (result.firstName?.toLowerCase().includes(' and ')) {
+        const firstPerson = result.firstName.split(/\s+and\s+/i)[0].trim();
+        result.firstName = firstPerson;
+      }
+
       // Handle full name in firstName field
       if (result.firstName?.includes(' ') && (!result.lastName || result.lastName.match(/^[\(&-]/))) {
         const parts = result.firstName.split(/\s+/);
