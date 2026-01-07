@@ -15,7 +15,7 @@ function isPlaceholderPhone(phone: string | undefined): boolean {
 // Check if an email is a placeholder email
 function isPlaceholderEmail(email: string | undefined): boolean {
   if (!email) return false;
-  return email.endsWith('@placeholder.moovs.com');
+  return email.endsWith('@import.moovs.com') || email.endsWith('@placeholder.moovs.com');
 }
 
 // Validate contact data
