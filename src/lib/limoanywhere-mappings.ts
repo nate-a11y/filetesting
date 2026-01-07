@@ -379,8 +379,9 @@ export function applyReservationTransforms(data: Record<string, string>[]): Reco
   });
 }
 
-// Phone fallback placeholder
-export const PLACEHOLDER_PHONE = '+1 555-555-5555';
+// Phone fallback placeholder - uses reserved 555-01XX range with valid area code
+// 202 (Washington DC) + 555-0100 is officially reserved for fictional/test use
+export const PLACEHOLDER_PHONE = '+1 202-555-0100';
 
 // US State codes for validation
 const US_STATES = new Set([
