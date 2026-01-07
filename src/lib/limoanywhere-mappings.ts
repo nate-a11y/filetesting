@@ -43,50 +43,93 @@ export const LIMOANYWHERE_RESERVATION_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Confirmation #', targetField: 'confirmationNumber' },
   { sourceColumn: 'Confirmation Number', targetField: 'confirmationNumber' },
   { sourceColumn: 'Conf #', targetField: 'confirmationNumber' },
+  { sourceColumn: 'Conf#', targetField: 'confirmationNumber' },
+  { sourceColumn: 'Trip #', targetField: 'confirmationNumber' },
+  { sourceColumn: 'Trip Number', targetField: 'confirmationNumber' },
+  { sourceColumn: 'Reservation #', targetField: 'confirmationNumber' },
+  // Dates and times
   { sourceColumn: 'Pick Up Date', targetField: 'pickUpDate' },
   { sourceColumn: 'Pickup Date', targetField: 'pickUpDate' },
   { sourceColumn: 'PU Date', targetField: 'pickUpDate' },
+  { sourceColumn: 'Date', targetField: 'pickUpDate' },
+  { sourceColumn: 'Trip Date', targetField: 'pickUpDate' },
   { sourceColumn: 'Pick Up Time', targetField: 'pickUpTime' },
   { sourceColumn: 'Pickup Time', targetField: 'pickUpTime' },
   { sourceColumn: 'PU Time', targetField: 'pickUpTime' },
+  { sourceColumn: 'Time', targetField: 'pickUpTime' },
   { sourceColumn: 'Drop Off Date', targetField: 'dropOffDate' },
   { sourceColumn: 'Dropoff Date', targetField: 'dropOffDate' },
   { sourceColumn: 'DO Date', targetField: 'dropOffDate' },
   { sourceColumn: 'Drop Off Time', targetField: 'dropOffTime' },
   { sourceColumn: 'Dropoff Time', targetField: 'dropOffTime' },
   { sourceColumn: 'DO Time', targetField: 'dropOffTime' },
+  // Service/Order type
   { sourceColumn: 'Service Type', targetField: 'orderType' },
   { sourceColumn: 'Trip Type', targetField: 'orderType' },
   { sourceColumn: 'Order Type', targetField: 'orderType' },
+  { sourceColumn: 'Type', targetField: 'orderType' },
+  { sourceColumn: 'Service', targetField: 'orderType' },
+  // Passengers - note the various formats from LimoAnywhere
   { sourceColumn: 'Passengers', targetField: 'totalGroupSize' },
   { sourceColumn: 'Pax', targetField: 'totalGroupSize' },
+  { sourceColumn: 'Pax #', targetField: 'totalGroupSize' },
+  { sourceColumn: 'Pax#', targetField: 'totalGroupSize' },
+  { sourceColumn: '# Pax', targetField: 'totalGroupSize' },
+  { sourceColumn: '#Pax', targetField: 'totalGroupSize' },
   { sourceColumn: 'Group Size', targetField: 'totalGroupSize' },
+  { sourceColumn: 'Number of Passengers', targetField: 'totalGroupSize' },
+  // Addresses
   { sourceColumn: 'Pick Up Address', targetField: 'pickUpAddress' },
   { sourceColumn: 'Pickup Address', targetField: 'pickUpAddress' },
   { sourceColumn: 'PU Address', targetField: 'pickUpAddress' },
   { sourceColumn: 'From', targetField: 'pickUpAddress' },
+  { sourceColumn: 'Pick Up', targetField: 'pickUpAddress' },
+  { sourceColumn: 'Pickup', targetField: 'pickUpAddress' },
+  { sourceColumn: 'Origin', targetField: 'pickUpAddress' },
   { sourceColumn: 'Pick Up Notes', targetField: 'pickUpNotes' },
   { sourceColumn: 'PU Notes', targetField: 'pickUpNotes' },
+  { sourceColumn: 'Pickup Notes', targetField: 'pickUpNotes' },
   { sourceColumn: 'Drop Off Address', targetField: 'dropOffAddress' },
+  { sourceColumn: 'Drop-Off Address', targetField: 'dropOffAddress' },
   { sourceColumn: 'Dropoff Address', targetField: 'dropOffAddress' },
   { sourceColumn: 'DO Address', targetField: 'dropOffAddress' },
   { sourceColumn: 'To', targetField: 'dropOffAddress' },
+  { sourceColumn: 'Drop Off', targetField: 'dropOffAddress' },
+  { sourceColumn: 'Drop-Off', targetField: 'dropOffAddress' },
+  { sourceColumn: 'Dropoff', targetField: 'dropOffAddress' },
+  { sourceColumn: 'Destination', targetField: 'dropOffAddress' },
   { sourceColumn: 'Drop Off Notes', targetField: 'dropOffNotes' },
+  { sourceColumn: 'Drop-Off Notes', targetField: 'dropOffNotes' },
   { sourceColumn: 'DO Notes', targetField: 'dropOffNotes' },
-  // Booking contact
+  { sourceColumn: 'Dropoff Notes', targetField: 'dropOffNotes' },
+  // Booking contact - various LimoAnywhere column names
   { sourceColumn: 'Booking First Name', targetField: 'bookingContactFirstName' },
   { sourceColumn: 'Booker First Name', targetField: 'bookingContactFirstName' },
   { sourceColumn: 'Customer First Name', targetField: 'bookingContactFirstName' },
+  { sourceColumn: 'Billing First Name', targetField: 'bookingContactFirstName' },
+  { sourceColumn: 'Account First Name', targetField: 'bookingContactFirstName' },
   { sourceColumn: 'Booking Last Name', targetField: 'bookingContactLastName' },
   { sourceColumn: 'Booker Last Name', targetField: 'bookingContactLastName' },
   { sourceColumn: 'Customer Last Name', targetField: 'bookingContactLastName' },
+  { sourceColumn: 'Billing Last Name', targetField: 'bookingContactLastName' },
+  { sourceColumn: 'Account Last Name', targetField: 'bookingContactLastName' },
   { sourceColumn: 'Booking Email', targetField: 'bookingContactEmail' },
   { sourceColumn: 'Booker Email', targetField: 'bookingContactEmail' },
   { sourceColumn: 'Customer Email', targetField: 'bookingContactEmail' },
+  { sourceColumn: 'Billing Email', targetField: 'bookingContactEmail' },
+  { sourceColumn: 'Account Email', targetField: 'bookingContactEmail' },
   { sourceColumn: 'Booking Phone', targetField: 'bookingContactPhoneNumber' },
   { sourceColumn: 'Booker Phone', targetField: 'bookingContactPhoneNumber' },
   { sourceColumn: 'Customer Phone', targetField: 'bookingContactPhoneNumber' },
-  // Trip contact
+  { sourceColumn: 'Billing Phone', targetField: 'bookingContactPhoneNumber' },
+  { sourceColumn: 'Account Phone', targetField: 'bookingContactPhoneNumber' },
+  // Full name fields (will be split during transformation)
+  { sourceColumn: 'Customer Name', targetField: '_bookingFullName' },
+  { sourceColumn: 'Billing Name', targetField: '_bookingFullName' },
+  { sourceColumn: 'Account Name', targetField: '_bookingFullName' },
+  { sourceColumn: 'Booker Name', targetField: '_bookingFullName' },
+  { sourceColumn: 'Billing Contact', targetField: '_bookingFullName' },
+  // Trip/Passenger contact
   { sourceColumn: 'Passenger First Name', targetField: 'tripContactFirstName' },
   { sourceColumn: 'Rider First Name', targetField: 'tripContactFirstName' },
   { sourceColumn: 'Passenger Last Name', targetField: 'tripContactLastName' },
@@ -95,16 +138,29 @@ export const LIMOANYWHERE_RESERVATION_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Rider Email', targetField: 'tripContactEmail' },
   { sourceColumn: 'Passenger Phone', targetField: 'tripContactPhoneNumber' },
   { sourceColumn: 'Rider Phone', targetField: 'tripContactPhoneNumber' },
+  // Full passenger name (will be split)
+  { sourceColumn: 'Passenger Name', targetField: '_passengerFullName' },
+  { sourceColumn: 'Rider Name', targetField: '_passengerFullName' },
+  { sourceColumn: 'Passenger', targetField: '_passengerFullName' },
+  { sourceColumn: 'Lead Passenger', targetField: '_passengerFullName' },
   // Vehicle
   { sourceColumn: 'Vehicle', targetField: 'vehicle' },
   { sourceColumn: 'Vehicle Type', targetField: 'vehicle' },
+  { sourceColumn: 'Primary Vehicle', targetField: 'vehicle' },
   { sourceColumn: 'Car Type', targetField: 'vehicle' },
+  { sourceColumn: 'Car', targetField: 'vehicle' },
+  { sourceColumn: 'Vehicle Class', targetField: 'vehicle' },
   // Notes and rate
   { sourceColumn: 'Trip Notes', targetField: 'tripNotes' },
   { sourceColumn: 'Notes', targetField: 'tripNotes' },
+  { sourceColumn: 'Special Instructions', targetField: 'tripNotes' },
+  { sourceColumn: 'Comments', targetField: 'tripNotes' },
   { sourceColumn: 'Base Rate', targetField: 'baseRateAmt' },
   { sourceColumn: 'Rate', targetField: 'baseRateAmt' },
   { sourceColumn: 'Price', targetField: 'baseRateAmt' },
+  { sourceColumn: 'Trip Total', targetField: 'baseRateAmt' },
+  { sourceColumn: 'Total', targetField: 'baseRateAmt' },
+  { sourceColumn: 'Amount', targetField: 'baseRateAmt' },
   // Stops
   { sourceColumn: 'Stop 1', targetField: 'stop1Address' },
   { sourceColumn: 'Stop 1 Address', targetField: 'stop1Address' },
@@ -113,6 +169,215 @@ export const LIMOANYWHERE_RESERVATION_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Stop 3', targetField: 'stop3Address' },
   { sourceColumn: 'Stop 3 Address', targetField: 'stop3Address' },
 ];
+
+// Map LimoAnywhere service types to our orderType values
+const ORDER_TYPE_MAP: Record<string, string> = {
+  // Airport variants
+  'airport': 'airport',
+  'airport transfer': 'airport',
+  'airport pickup': 'airport-pick-up',
+  'airport pick up': 'airport-pick-up',
+  'airport pick-up': 'airport-pick-up',
+  'airport dropoff': 'airport-drop-off',
+  'airport drop off': 'airport-drop-off',
+  'airport drop-off': 'airport-drop-off',
+  'to airport': 'airport-drop-off',
+  'from airport': 'airport-pick-up',
+  // Point to point
+  'point to point': 'point-to-point',
+  'point-to-point': 'point-to-point',
+  'p2p': 'point-to-point',
+  'transfer': 'point-to-point',
+  'one way': 'point-to-point',
+  'one-way': 'point-to-point',
+  // Hourly/Charter/Shuttle
+  'hourly': 'leisure',
+  'hourly/as directed': 'leisure',
+  'as directed': 'leisure',
+  'charter': 'leisure',
+  'shuttle': 'point-to-point',
+  'rental': 'leisure',
+  'tour retail': 'retail',
+  'retail': 'retail',
+  // Wedding
+  'wedding': 'wedding',
+  'wedding transfer': 'wedding',
+  // Corporate
+  'corporate': 'corporate',
+  'business': 'business-trip',
+  'business trip': 'business-trip',
+  'executive': 'corporate',
+  // Events
+  'concert': 'concert',
+  'sporting event': 'sporting-event',
+  'sports': 'sporting-event',
+  'game': 'sporting-event',
+  'football': 'football',
+  'baseball': 'baseball',
+  'basketball': 'basketball',
+  'hockey': 'hockey',
+  'golf': 'golf',
+  // Special occasions
+  'prom': 'prom-homecoming',
+  'homecoming': 'prom-homecoming',
+  'graduation': 'graduation',
+  'birthday': 'birthday',
+  'anniversary': 'special-occasion',
+  'night out': 'night-out',
+  'night-out': 'night-out',
+  'bachelor': 'bachelor-bachelorette',
+  'bachelorette': 'bachelor-bachelorette',
+  'bachelor party': 'bachelor-bachelorette',
+  'bachelorette party': 'bachelor-bachelorette',
+  // Tours
+  'wine tour': 'wine-tour',
+  'wine tasting': 'wine-tour',
+  'brewery tour': 'brew-tour',
+  'brew tour': 'brew-tour',
+  // Medical
+  'medical': 'medical',
+  'hospital': 'medical',
+  'doctor': 'medical',
+  // Seaport/Train
+  'seaport': 'seaport',
+  'cruise': 'seaport',
+  'cruise terminal': 'seaport',
+  'train': 'train-station',
+  'train station': 'train-station',
+  'amtrak': 'train-station',
+  // Funeral
+  'funeral': 'funeral',
+  'memorial': 'funeral',
+  // School
+  'school': 'school',
+  'field trip': 'field-trip',
+  // Other
+  'personal': 'personal-trip',
+  'other': 'point-to-point',
+  'miscellaneous': 'point-to-point',
+  'misc': 'point-to-point',
+};
+
+// Transform orderType from LimoAnywhere format to our format
+function transformOrderType(value: string | undefined): string {
+  if (!value?.trim()) return 'point-to-point'; // Default
+
+  const normalized = value.trim().toLowerCase();
+
+  // Check exact match first
+  if (ORDER_TYPE_MAP[normalized]) {
+    return ORDER_TYPE_MAP[normalized];
+  }
+
+  // Check partial matches
+  for (const [key, mapped] of Object.entries(ORDER_TYPE_MAP)) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return mapped;
+    }
+  }
+
+  // Default fallback
+  return 'point-to-point';
+}
+
+// Split a full name into first and last name
+function splitFullName(fullName: string | undefined): { firstName: string; lastName: string } {
+  if (!fullName?.trim()) return { firstName: '', lastName: '' };
+
+  const cleaned = fullName.trim();
+  const parts = cleaned.split(/\s+/);
+
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: '' };
+  }
+
+  // First word is first name, rest is last name
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+// Apply transformations specific to reservation data
+export function applyReservationTransforms(data: Record<string, string>[]): Record<string, string>[] {
+  return data.map(row => {
+    const result = { ...row };
+
+    // === ORDER TYPE TRANSFORMATION ===
+    if (result.orderType) {
+      result.orderType = transformOrderType(result.orderType);
+    } else {
+      result.orderType = 'point-to-point';
+    }
+
+    // === TOTAL GROUP SIZE DEFAULT ===
+    if (!result.totalGroupSize?.trim() || result.totalGroupSize === '0') {
+      result.totalGroupSize = '1';
+    }
+
+    // === SPLIT FULL NAMES ===
+    // Passenger/Trip contact from full name
+    if (result._passengerFullName && (!result.tripContactFirstName || !result.tripContactLastName)) {
+      const { firstName, lastName } = splitFullName(result._passengerFullName);
+      if (!result.tripContactFirstName) result.tripContactFirstName = firstName;
+      if (!result.tripContactLastName) result.tripContactLastName = lastName || firstName; // Use firstName as lastName if missing
+    }
+
+    // Booking contact from full name
+    if (result._bookingFullName && (!result.bookingContactFirstName || !result.bookingContactLastName)) {
+      const { firstName, lastName } = splitFullName(result._bookingFullName);
+      if (!result.bookingContactFirstName) result.bookingContactFirstName = firstName;
+      if (!result.bookingContactLastName) result.bookingContactLastName = lastName || firstName;
+    }
+
+    // === COPY BOOKING TO TRIP IF TRIP IS MISSING ===
+    if (!result.tripContactFirstName && result.bookingContactFirstName) {
+      result.tripContactFirstName = result.bookingContactFirstName;
+    }
+    if (!result.tripContactLastName && result.bookingContactLastName) {
+      result.tripContactLastName = result.bookingContactLastName;
+    }
+    if (!result.tripContactEmail && result.bookingContactEmail) {
+      result.tripContactEmail = result.bookingContactEmail;
+    }
+    if (!result.tripContactPhoneNumber && result.bookingContactPhoneNumber) {
+      result.tripContactPhoneNumber = result.bookingContactPhoneNumber;
+    }
+
+    // === COPY TRIP TO BOOKING IF BOOKING IS MISSING ===
+    if (!result.bookingContactFirstName && result.tripContactFirstName) {
+      result.bookingContactFirstName = result.tripContactFirstName;
+    }
+    if (!result.bookingContactLastName && result.tripContactLastName) {
+      result.bookingContactLastName = result.tripContactLastName;
+    }
+    if (!result.bookingContactEmail && result.tripContactEmail) {
+      result.bookingContactEmail = result.tripContactEmail;
+    }
+    if (!result.bookingContactPhoneNumber && result.tripContactPhoneNumber) {
+      result.bookingContactPhoneNumber = result.tripContactPhoneNumber;
+    }
+
+    // === FORMAT PHONE NUMBERS ===
+    if (result.bookingContactPhoneNumber) {
+      result.bookingContactPhoneNumber = cleanPhoneNumber(result.bookingContactPhoneNumber) || PLACEHOLDER_PHONE;
+    } else {
+      result.bookingContactPhoneNumber = PLACEHOLDER_PHONE;
+    }
+
+    if (result.tripContactPhoneNumber) {
+      result.tripContactPhoneNumber = cleanPhoneNumber(result.tripContactPhoneNumber) || PLACEHOLDER_PHONE;
+    } else {
+      result.tripContactPhoneNumber = PLACEHOLDER_PHONE;
+    }
+
+    // === CLEANUP TEMP FIELDS ===
+    delete result._passengerFullName;
+    delete result._bookingFullName;
+
+    return result;
+  });
+}
 
 // Phone fallback placeholder
 export const PLACEHOLDER_PHONE = '+1 555-555-5555';
@@ -147,6 +412,51 @@ const GARBAGE_ADDRESS_PATTERNS = [
   /^tbd$/i, /^hotel\s*tbd$/i, /^address\s*tbd$/i, /^tba$/i,
   /^n\/?a$/i, /^unknown$/i, /^pending$/i, /restaurant\s+in\s+/i
 ];
+
+// Detect if a value looks like a phone number
+function looksLikePhone(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  const cleaned = value.trim();
+  // Phone number patterns: starts with +, or is 10-11 digits, or formatted like xxx-xxx-xxxx
+  if (cleaned.startsWith('+')) return true;
+  const digitsOnly = cleaned.replace(/\D/g, '');
+  if (digitsOnly.length >= 10 && digitsOnly.length <= 15) return true;
+  if (/^\d{3}[-.\s]?\d{3}[-.\s]?\d{4}$/.test(cleaned)) return true;
+  return false;
+}
+
+// Detect if a value looks like an email
+function looksLikeEmail(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+// Detect if a value looks like a zip code (5 digits or 5+4)
+function looksLikeZip(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  return /^\d{5}(-\d{4})?$/.test(value.trim());
+}
+
+// Try to find an email in any field of the row
+function findEmailInRow(row: Record<string, string>): string | null {
+  for (const [key, value] of Object.entries(row)) {
+    if (value && looksLikeEmail(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
+// Try to find a phone number in any field of the row
+function findPhoneInRow(row: Record<string, string>, excludeField?: string): string | null {
+  for (const [key, value] of Object.entries(row)) {
+    if (key === excludeField) continue;
+    if (value && looksLikePhone(value) && !looksLikeEmail(value)) {
+      return value;
+    }
+  }
+  return null;
+}
 
 // Format and clean a phone number - returns formatted number or placeholder if invalid
 function cleanPhoneNumber(phone: string | undefined): string {
@@ -185,7 +495,55 @@ export function applyPhoneFallback(data: Record<string, string>[]): Record<strin
     .map(row => {
       const result = { ...row };
 
+      // === COLUMN MISALIGNMENT RECOVERY ===
+      // LimoAnywhere exports often have unquoted commas in addresses which shifts all columns
+
+      // Check if email field has a phone number (column shift indicator)
+      if (looksLikePhone(result.email) && !looksLikeEmail(result.email)) {
+        // The "email" is actually a phone - try to find real email elsewhere
+        const realEmail = findEmailInRow(result);
+        const phoneFromEmail = result.email;
+
+        if (realEmail) {
+          result.email = realEmail;
+        } else {
+          result.email = ''; // Will be filled with placeholder later
+        }
+
+        // Use the phone we found if we don't have one
+        if (!result.mobilePhone || looksLikeZip(result.mobilePhone)) {
+          result.mobilePhone = phoneFromEmail;
+        }
+      }
+
+      // Check if phone field has a zip code (another column shift indicator)
+      if (looksLikeZip(result.mobilePhone)) {
+        // Try to find real phone in other fields
+        const realPhone = findPhoneInRow(result, 'mobilePhone');
+        if (realPhone) {
+          result.mobilePhone = realPhone;
+        } else {
+          result.mobilePhone = ''; // Will fall back to placeholder
+        }
+      }
+
+      // Also check _homePhone and _officePhone for zip codes
+      if (looksLikeZip(result._homePhone)) {
+        result._homePhone = '';
+      }
+      if (looksLikeZip(result._officePhone)) {
+        result._officePhone = '';
+      }
+
       // === NAME CLEANING (do this first so we can check again) ===
+
+      // Handle wedding couple names like "Stephanie Schwarzmiller and James Plecensia"
+      // Take only the first person's name
+      if (result.firstName?.toLowerCase().includes(' and ')) {
+        const firstPerson = result.firstName.split(/\s+and\s+/i)[0].trim();
+        result.firstName = firstPerson;
+      }
+
       // Handle full name in firstName field
       if (result.firstName?.includes(' ') && (!result.lastName || result.lastName.match(/^[\(&-]/))) {
         const parts = result.firstName.split(/\s+/);
