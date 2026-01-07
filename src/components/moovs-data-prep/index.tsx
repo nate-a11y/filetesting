@@ -261,13 +261,13 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Moovs Data Prep</h1>
-          <p className="text-gray-700 mt-2">Prepare your data for import into Moovs via OneSchema</p>
+          <p className="text-gray-900 mt-2">Prepare your data for import into Moovs via OneSchema</p>
         </div>
 
         {/* Operator ID Input */}
         {state.step === 'select-workflow' && (
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-900 mb-2">
               Operator ID
             </label>
             <input
@@ -285,13 +285,13 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
           <div className="mb-6 flex items-center gap-2">
             <button
               onClick={resetWorkflow}
-              className="flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900"
+              className="flex items-center gap-1 text-sm text-gray-900 hover:text-gray-900"
             >
               <ArrowLeft className="w-4 h-4" />
               Start Over
             </button>
             <span className="text-gray-500" aria-hidden="true">|</span>
-            <span className="text-sm text-gray-700">
+            <span className="text-sm text-gray-900">
               {state.workflow === 'contacts' ? 'Contacts' : 'Reservations'}
               {state.format && ` / ${state.format === 'limoanywhere' ? 'LimoAnywhere' : 'Custom'}`}
             </span>
@@ -320,7 +320,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             >
               <Users className="w-12 h-12 text-blue-500 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">Contacts</h2>
-              <p className="text-gray-700 mt-2">
+              <p className="text-gray-900 mt-2">
                 Clean up your contact list - fix missing emails, invalid phones, and detect duplicates.
               </p>
             </button>
@@ -332,12 +332,12 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             >
               <Calendar className="w-12 h-12 text-green-500 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">Reservations</h2>
-              <p className="text-gray-700 mt-2">
+              <p className="text-gray-900 mt-2">
                 Clean up your trip history - fix dates, addresses, and contact information.
               </p>
             </button>
             {!state.operatorId && (
-              <p id="operator-required" className="col-span-2 text-sm text-gray-700 text-center">
+              <p id="operator-required" className="col-span-2 text-sm text-gray-900 text-center">
                 Enter your Operator ID above to continue
               </p>
             )}
@@ -353,7 +353,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             >
               <FileSpreadsheet className="w-12 h-12 text-purple-600 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">LimoAnywhere</h2>
-              <p className="text-gray-700 mt-2">
+              <p className="text-gray-900 mt-2">
                 Auto-mapped columns for LimoAnywhere exports. Just upload and fix issues.
               </p>
             </button>
@@ -363,7 +363,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             >
               <FileSpreadsheet className="w-12 h-12 text-orange-600 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">Custom Format</h2>
-              <p className="text-gray-700 mt-2">
+              <p className="text-gray-900 mt-2">
                 Map your columns to Moovs fields manually. Works with any CSV export.
               </p>
             </button>
@@ -399,15 +399,15 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center p-4 bg-green-50 rounded-lg">
                   <p className="text-3xl font-bold text-green-600">{readyCount}</p>
-                  <p className="text-sm text-gray-700">Ready to Import</p>
+                  <p className="text-sm text-gray-900">Ready to Import</p>
                 </div>
                 <div className="text-center p-4 bg-yellow-50 rounded-lg">
                   <p className="text-3xl font-bold text-yellow-700">{totalIssues}</p>
-                  <p className="text-sm text-gray-700">Issues Found</p>
+                  <p className="text-sm text-gray-900">Issues Found</p>
                 </div>
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
                   <p className="text-3xl font-bold text-blue-700">{state.duplicates.length}</p>
-                  <p className="text-sm text-gray-700">Duplicate Groups</p>
+                  <p className="text-sm text-gray-900">Duplicate Groups</p>
                 </div>
               </div>
             </div>
@@ -431,7 +431,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                     <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
                       <div className="flex items-center gap-2">
                         <AlertCircle className="w-5 h-5 text-yellow-500" />
-                        <span className="text-gray-700">{missingEmailCount} missing emails</span>
+                        <span className="text-gray-900">{missingEmailCount} missing emails</span>
                       </div>
                       <span className="text-sm text-gray-500">Will generate placeholder emails</span>
                     </div>
@@ -440,7 +440,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                     <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                       <div className="flex items-center gap-2">
                         <AlertCircle className="w-5 h-5 text-red-500" />
-                        <span className="text-gray-700">{invalidPhoneCount} invalid phone numbers</span>
+                        <span className="text-gray-900">{invalidPhoneCount} invalid phone numbers</span>
                       </div>
                       <span className="text-sm text-gray-500">Review manually</span>
                     </div>
@@ -451,7 +451,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                       <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div className="flex items-center gap-2">
                           <AlertCircle className="w-5 h-5 text-gray-500" />
-                          <span className="text-gray-700">{count} {key.replace('-', ' ')}</span>
+                          <span className="text-gray-900">{count} {key.replace('-', ' ')}</span>
                         </div>
                       </div>
                     ))}
@@ -559,12 +559,12 @@ function FileUploader({
       {isProcessing ? (
         <div className="flex flex-col items-center">
           <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-700">Processing file...</p>
+          <p className="text-gray-900">Processing file...</p>
         </div>
       ) : (
         <>
           <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-lg text-gray-700 mb-2">Drag & drop your CSV file here</p>
+          <p className="text-lg text-gray-900 mb-2">Drag & drop your CSV file here</p>
           <p className="text-sm text-gray-500 mb-4">or</p>
           <label className="inline-block px-6 py-3 bg-blue-500 text-white rounded-lg cursor-pointer hover:bg-blue-600">
             Select File
@@ -611,7 +611,7 @@ function ColumnMapper({
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
       <h2 className="text-xl font-semibold text-gray-900">Map Your Columns</h2>
-      <p className="text-gray-700">
+      <p className="text-gray-900">
         Match your CSV columns to the Moovs fields. Required fields are marked with *.
       </p>
 
@@ -621,7 +621,7 @@ function ColumnMapper({
           return (
             <div key={field} className="flex items-center gap-4">
               <div className="w-1/2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-900">
                   {field} {isRequired && <span className="text-red-500">*</span>}
                 </label>
               </div>
@@ -727,17 +727,17 @@ function DataPreview({
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="px-3 py-1 text-sm text-gray-700 hover:text-gray-900 disabled:text-gray-500 disabled:cursor-not-allowed"
+            className="px-3 py-1 text-sm text-gray-900 hover:text-gray-900 disabled:text-gray-500 disabled:cursor-not-allowed"
           >
             Previous
           </button>
-          <span className="text-sm text-gray-700">
+          <span className="text-sm text-gray-900">
             Page {page + 1} of {totalPages}
           </span>
           <button
             onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
             disabled={page === totalPages - 1}
-            className="px-3 py-1 text-sm text-gray-700 hover:text-gray-900 disabled:text-gray-500 disabled:cursor-not-allowed"
+            className="px-3 py-1 text-sm text-gray-900 hover:text-gray-900 disabled:text-gray-500 disabled:cursor-not-allowed"
           >
             Next
           </button>
