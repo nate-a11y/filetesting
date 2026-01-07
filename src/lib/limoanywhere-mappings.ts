@@ -6,9 +6,18 @@ export const LIMOANYWHERE_CONTACT_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Last Name', targetField: 'lastName' },
   { sourceColumn: 'Cell Phone', targetField: 'mobilePhone' },
   { sourceColumn: 'Email', targetField: 'email' },
-  // Alternative column names
+  // Alternative column names for phone (will use fallback logic: cellular > home > office)
   { sourceColumn: 'Mobile Phone', targetField: 'mobilePhone' },
+  { sourceColumn: 'Cellular Phone', targetField: 'mobilePhone' },
+  { sourceColumn: 'Cellular', targetField: 'mobilePhone' },
   { sourceColumn: 'Phone', targetField: 'mobilePhone' },
+  // Fallback phone columns (captured for fallback logic)
+  { sourceColumn: 'Home Phone', targetField: '_homePhone' },
+  { sourceColumn: 'Home', targetField: '_homePhone' },
+  { sourceColumn: 'Office Phone', targetField: '_officePhone' },
+  { sourceColumn: 'Office', targetField: '_officePhone' },
+  { sourceColumn: 'Work Phone', targetField: '_officePhone' },
+  { sourceColumn: 'Business Phone', targetField: '_officePhone' },
   { sourceColumn: 'E-mail', targetField: 'email' },
   { sourceColumn: 'EmailAddress', targetField: 'email' },
   { sourceColumn: 'Email Address', targetField: 'email' },
@@ -101,6 +110,33 @@ export const LIMOANYWHERE_RESERVATION_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Stop 3', targetField: 'stop3Address' },
   { sourceColumn: 'Stop 3 Address', targetField: 'stop3Address' },
 ];
+
+// Phone fallback placeholder
+export const PLACEHOLDER_PHONE = '+1 555-555-5555';
+
+// Apply phone fallback logic: cellular > home > office > placeholder
+export function applyPhoneFallback(data: Record<string, string>[]): Record<string, string>[] {
+  return data.map(row => {
+    const result = { ...row };
+
+    // If no mobilePhone, try fallbacks
+    if (!result.mobilePhone?.trim()) {
+      if (result._homePhone?.trim()) {
+        result.mobilePhone = result._homePhone;
+      } else if (result._officePhone?.trim()) {
+        result.mobilePhone = result._officePhone;
+      } else {
+        result.mobilePhone = PLACEHOLDER_PHONE;
+      }
+    }
+
+    // Clean up temporary fields
+    delete result._homePhone;
+    delete result._officePhone;
+
+    return result;
+  });
+}
 
 // Auto-detect LimoAnywhere format from headers
 export function detectLimoAnywhereFormat(headers: string[]): boolean {
