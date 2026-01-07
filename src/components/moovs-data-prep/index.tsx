@@ -42,6 +42,13 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Track multi-file upload stats
+  const [uploadStats, setUploadStats] = useState<{
+    fileCount: number;
+    totalRows: number;
+    droppedRows: number;
+  } | null>(null);
+
   // Reset to beginning
   const resetWorkflow = () => {
     setState({
@@ -57,6 +64,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
       operatorId: state.operatorId,
     });
     setError(null);
+    setUploadStats(null);
   };
 
   // Select workflow type
@@ -69,16 +77,40 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
     setState(prev => ({ ...prev, format, step: 'upload' }));
   };
 
-  // Handle file upload
-  const handleFileUpload = useCallback(async (file: File) => {
+  // Handle file upload - supports multiple files
+  const handleFileUpload = useCallback(async (files: File[]) => {
     setIsProcessing(true);
     setError(null);
+    setUploadStats(null);
 
     try {
-      const { headers, data } = await parseCSV(file);
+      // Parse all files
+      const parsedFiles = await Promise.all(files.map(f => parseCSV(f)));
+
+      if (parsedFiles.length === 0) {
+        throw new Error('No valid CSV files found');
+      }
+
+      // Use headers from first file as reference
+      const referenceHeaders = parsedFiles[0].headers;
+
+      // Validate all files have same headers (or compatible headers)
+      for (let i = 1; i < parsedFiles.length; i++) {
+        const fileHeaders = parsedFiles[i].headers;
+        // Check if headers match (allowing for order differences)
+        const headerSet = new Set(referenceHeaders);
+        const mismatchedHeaders = fileHeaders.filter(h => !headerSet.has(h));
+        if (mismatchedHeaders.length > 0 && mismatchedHeaders.length > referenceHeaders.length * 0.5) {
+          throw new Error(`File ${i + 1} has different headers. Please ensure all files are from the same export type.`);
+        }
+      }
+
+      // Combine all data rows
+      const combinedData = parsedFiles.flatMap(f => f.data);
+      const totalRowsBeforeCleaning = combinedData.length;
 
       // Auto-detect format if LimoAnywhere
-      const isLimoFormat = state.format === 'limoanywhere' || detectLimoAnywhereFormat(headers);
+      const isLimoFormat = state.format === 'limoanywhere' || detectLimoAnywhereFormat(referenceHeaders);
 
       // Get appropriate mappings
       const targetFields = state.workflow === 'contacts' ? CONTACT_HEADERS : RESERVATION_HEADERS;
@@ -88,7 +120,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
       let mappings: ColumnMapping[];
       if (isLimoFormat || state.format === 'limoanywhere') {
-        mappings = autoMapColumns(headers, targetFields, knownMappings);
+        mappings = autoMapColumns(referenceHeaders, targetFields, knownMappings);
       } else {
         // For custom, start with empty mappings (user will map)
         mappings = [];
@@ -96,32 +128,49 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
       setState(prev => ({
         ...prev,
-        headers,
-        rawData: data,
+        headers: referenceHeaders,
+        rawData: combinedData,
         columnMappings: mappings,
         step: state.format === 'custom' ? 'map-columns' : 'analyze',
       }));
 
+      // Track upload stats (droppedRows will be updated after processing)
+      setUploadStats({
+        fileCount: files.length,
+        totalRows: totalRowsBeforeCleaning,
+        droppedRows: 0,
+      });
+
       // If auto-mapped, proceed to analysis
       if (state.format !== 'custom') {
-        processData(headers, data, mappings);
+        processData(referenceHeaders, combinedData, mappings, totalRowsBeforeCleaning);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse CSV file');
+      setError(err instanceof Error ? err.message : 'Failed to parse CSV files');
     } finally {
       setIsProcessing(false);
     }
   }, [state.workflow, state.format]);
 
   // Process data with mappings
-  const processData = useCallback((headers: string[], rawData: string[][], mappings: ColumnMapping[]) => {
+  const processData = useCallback((headers: string[], rawData: string[][], mappings: ColumnMapping[], totalRowsBeforeCleaning?: number) => {
     setIsProcessing(true);
 
     try {
       let parsed = applyMappings(headers, rawData, mappings);
+      const countBeforePhoneFallback = parsed.length;
 
-      // Apply phone fallback logic (cellular > home > office > placeholder)
+      // Apply phone fallback logic + name cleaning + drop records without names
       parsed = applyPhoneFallback(parsed);
+
+      // Track dropped rows (records without first/last name)
+      const droppedCount = countBeforePhoneFallback - parsed.length;
+      if (totalRowsBeforeCleaning !== undefined) {
+        setUploadStats(prev => prev ? {
+          ...prev,
+          droppedRows: droppedCount,
+        } : null);
+      }
 
       // Validate based on workflow
       const { validatedData, issues } = state.workflow === 'contacts'
@@ -393,6 +442,29 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
         {/* Step: Analyze */}
         {state.step === 'analyze' && (
           <div className="space-y-6">
+            {/* Multi-file upload stats */}
+            {uploadStats && (uploadStats.fileCount > 1 || uploadStats.droppedRows > 0) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-900">
+                  {uploadStats.fileCount > 1 && (
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                      <span><strong>{uploadStats.fileCount}</strong> files combined</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span><strong>{uploadStats.totalRows}</strong> total rows</span>
+                  </div>
+                  {uploadStats.droppedRows > 0 && (
+                    <div className="flex items-center gap-2 text-orange-700">
+                      <AlertCircle className="w-4 h-4" />
+                      <span><strong>{uploadStats.droppedRows}</strong> rows dropped (missing name)</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Summary */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Analysis Results</h2>
@@ -519,12 +591,12 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
   );
 }
 
-// File uploader component
+// File uploader component - supports multiple files for combining
 function FileUploader({
   onUpload,
   isProcessing,
 }: {
-  onUpload: (file: File) => void;
+  onUpload: (files: File[]) => void;
   isProcessing: boolean;
 }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -532,16 +604,16 @@ function FileUploader({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.csv')) {
-      onUpload(file);
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.csv'));
+    if (files.length > 0) {
+      onUpload(files);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onUpload(file);
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length > 0) {
+      onUpload(files);
     }
   };
 
@@ -559,18 +631,20 @@ function FileUploader({
       {isProcessing ? (
         <div className="flex flex-col items-center">
           <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-          <p className="text-gray-900">Processing file...</p>
+          <p className="text-gray-900">Processing files...</p>
         </div>
       ) : (
         <>
           <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-lg text-gray-900 mb-2">Drag & drop your CSV file here</p>
+          <p className="text-lg text-gray-900 mb-2">Drag & drop your CSV files here</p>
+          <p className="text-sm text-gray-500 mb-2">Upload multiple files to combine them into one</p>
           <p className="text-sm text-gray-500 mb-4">or</p>
           <label className="inline-block px-6 py-3 bg-blue-500 text-white rounded-lg cursor-pointer hover:bg-blue-600">
-            Select File
+            Select Files
             <input
               type="file"
               accept=".csv"
+              multiple
               onChange={handleFileChange}
               className="hidden"
             />
