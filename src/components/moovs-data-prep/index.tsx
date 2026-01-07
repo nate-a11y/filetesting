@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import type { WorkflowType, FormatType, ColumnMapping, DataIssue, DuplicateGroup, WorkflowState } from '@/types/schemas';
 import { parseCSV, applyMappings, generateCSV, downloadCSV, CONTACT_HEADERS, RESERVATION_HEADERS } from '@/lib/csv-utils';
-import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat } from '@/lib/limoanywhere-mappings';
+import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, applyPhoneFallback } from '@/lib/limoanywhere-mappings';
 import { validateContacts, validateReservations, detectDuplicates } from '@/lib/validation';
 import { generatePlaceholderEmail } from '@/lib/email-utils';
 import { cn } from '@/lib/cn';
@@ -118,7 +118,10 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
     setIsProcessing(true);
 
     try {
-      const parsed = applyMappings(headers, rawData, mappings);
+      let parsed = applyMappings(headers, rawData, mappings);
+
+      // Apply phone fallback logic (cellular > home > office > placeholder)
+      parsed = applyPhoneFallback(parsed);
 
       // Validate based on workflow
       const { validatedData, issues } = state.workflow === 'contacts'
