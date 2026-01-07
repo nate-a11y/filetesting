@@ -1,6 +1,16 @@
 import type { DataIssue, ORDER_TYPES, ParsedContact, DuplicateGroup } from '@/types/schemas';
 import { validatePhone, normalizePhone } from './phone-utils';
 import { validateEmail, normalizeEmail, generatePlaceholderEmail } from './email-utils';
+import { PLACEHOLDER_PHONE } from './limoanywhere-mappings';
+
+// Check if a phone is the placeholder phone
+function isPlaceholderPhone(phone: string | undefined): boolean {
+  if (!phone) return false;
+  // Normalize both for comparison
+  const normalizedPhone = phone.replace(/[^0-9]/g, '');
+  const normalizedPlaceholder = PLACEHOLDER_PHONE.replace(/[^0-9]/g, '');
+  return normalizedPhone === normalizedPlaceholder;
+}
 
 // Validate contact data
 export function validateContacts(
@@ -42,6 +52,15 @@ export function validateContacts(
         suggestedValue: row.firstName && row.lastName
           ? generatePlaceholderEmail(row.firstName, row.lastName) // Will generate phone in fix step
           : undefined,
+      });
+    } else if (isPlaceholderPhone(row.mobilePhone)) {
+      // Placeholder phone is valid but informational - not an error
+      issues.push({
+        rowIndex: index,
+        field: 'mobilePhone',
+        type: 'info',
+        message: 'Using placeholder phone number (no phone was available)',
+        currentValue: row.mobilePhone,
       });
     } else {
       const phoneResult = validatePhone(row.mobilePhone);
@@ -279,6 +298,15 @@ function validateContactFields(
       field: `${prefix}PhoneNumber`,
       type: 'missing',
       message: `${prefix === 'bookingContact' ? 'Booking' : 'Trip'} contact phone is required`,
+    });
+  } else if (isPlaceholderPhone(phone)) {
+    // Placeholder phone is valid but informational - not an error
+    issues.push({
+      rowIndex: index,
+      field: `${prefix}PhoneNumber`,
+      type: 'info',
+      message: `${prefix === 'bookingContact' ? 'Booking' : 'Trip'} contact using placeholder phone`,
+      currentValue: phone,
     });
   } else {
     const phoneResult = validatePhone(phone);
