@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import type { WorkflowType, FormatType, ColumnMapping, DataIssue, DuplicateGroup, WorkflowState } from '@/types/schemas';
 import { parseCSV, applyMappings, generateCSV, downloadCSV, CONTACT_HEADERS, RESERVATION_HEADERS } from '@/lib/csv-utils';
 import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
+import { resetPlaceholderManager, type PlaceholderConfig } from '@/lib/placeholder-config';
 import { validateContacts, validateReservations, detectDuplicates } from '@/lib/validation';
 import { generatePlaceholderEmail } from '@/lib/email-utils';
 import { cn } from '@/lib/cn';
@@ -42,6 +43,13 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Placeholder configuration for imports
+  const [placeholderConfig, setPlaceholderConfig] = useState<PlaceholderConfig>({
+    basePhoneNumber: '+1 202-555-0100',
+    placeholderPickupAddress: undefined,
+    placeholderDropoffAddress: undefined,
+  });
 
   // Track multi-file upload stats
   const [uploadStats, setUploadStats] = useState<{
@@ -161,13 +169,16 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
       let parsed = applyMappings(headers, rawData, mappings);
       const countBeforeTransforms = parsed.length;
 
+      // Reset placeholder manager with current config before processing
+      resetPlaceholderManager(placeholderConfig);
+
       // Apply workflow-specific transformations
       if (state.workflow === 'contacts') {
         // Contact workflow: phone fallback + name cleaning + drop records without names
-        parsed = applyPhoneFallback(parsed);
+        parsed = applyPhoneFallback(parsed, placeholderConfig);
       } else {
         // Reservation workflow: orderType mapping, name splitting, defaults
-        parsed = applyReservationTransforms(parsed);
+        parsed = applyReservationTransforms(parsed, placeholderConfig);
       }
 
       // Track dropped rows (only applies to contacts)
@@ -199,7 +210,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
     } finally {
       setIsProcessing(false);
     }
-  }, [state.workflow, state.operatorId]);
+  }, [state.workflow, state.operatorId, placeholderConfig]);
 
   // Apply column mappings (for custom format)
   const applyColumnMappings = () => {
@@ -551,10 +562,87 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
         {/* Step: Upload */}
         {state.step === 'upload' && (
-          <FileUploader
-            onUpload={handleFileUpload}
-            isProcessing={isProcessing}
-          />
+          <div className="space-y-6">
+            {/* Placeholder Configuration */}
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Placeholder Configuration</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Configure placeholder values for missing data. These settings allow you to customize
+                placeholders based on your import source.
+              </p>
+
+              <div className="space-y-4">
+                {/* Base Phone Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Base Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={placeholderConfig.basePhoneNumber || ''}
+                    onChange={(e) => setPlaceholderConfig(prev => ({
+                      ...prev,
+                      basePhoneNumber: e.target.value
+                    }))}
+                    placeholder="+1 202-555-0100"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Missing phone numbers will be sequential: base, base+1, base+2, etc.
+                  </p>
+                </div>
+
+                {/* Placeholder Pickup Address (Reservations only) */}
+                {state.workflow === 'reservations' && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Placeholder Pickup Address (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={placeholderConfig.placeholderPickupAddress || ''}
+                        onChange={(e) => setPlaceholderConfig(prev => ({
+                          ...prev,
+                          placeholderPickupAddress: e.target.value || undefined
+                        }))}
+                        placeholder="123 Main St, Seattle, WA 98101"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Address to use when pickup address is missing. Leave empty to not use a placeholder.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Placeholder Dropoff Address (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={placeholderConfig.placeholderDropoffAddress || ''}
+                        onChange={(e) => setPlaceholderConfig(prev => ({
+                          ...prev,
+                          placeholderDropoffAddress: e.target.value || undefined
+                        }))}
+                        placeholder="456 Market St, Seattle, WA 98102"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Address to use when dropoff address is missing. Leave empty to not use a placeholder.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* File Uploader */}
+            <FileUploader
+              onUpload={handleFileUpload}
+              isProcessing={isProcessing}
+            />
+          </div>
         )}
 
         {/* Step: Map Columns (Custom only) */}
