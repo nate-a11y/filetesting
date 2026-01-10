@@ -1,5 +1,6 @@
 import type { ColumnMapping } from '@/types/schemas';
 import { formatPhone, validatePhone } from './phone-utils';
+import { getPlaceholderManager, type PlaceholderConfig } from './placeholder-config';
 
 // LimoAnywhere contact column mappings
 export const LIMOANYWHERE_CONTACT_MAPPINGS: ColumnMapping[] = [
@@ -361,7 +362,12 @@ function generateReservationPlaceholderEmail(firstName: string, lastName: string
 }
 
 // Apply transformations specific to reservation data
-export function applyReservationTransforms(data: Record<string, string>[]): Record<string, string>[] {
+export function applyReservationTransforms(
+  data: Record<string, string>[],
+  placeholderConfig?: PlaceholderConfig
+): Record<string, string>[] {
+  const placeholderManager = getPlaceholderManager(placeholderConfig);
+
   return data
     .map(row => {
       const result = { ...row };
@@ -449,15 +455,27 @@ export function applyReservationTransforms(data: Record<string, string>[]): Reco
 
       // === FORMAT PHONE NUMBERS ===
       if (result.bookingContactPhoneNumber) {
-        result.bookingContactPhoneNumber = cleanPhoneNumber(result.bookingContactPhoneNumber) || PLACEHOLDER_PHONE;
+        result.bookingContactPhoneNumber = cleanPhoneNumber(result.bookingContactPhoneNumber) || placeholderManager.getNextPhoneNumber();
       } else {
-        result.bookingContactPhoneNumber = PLACEHOLDER_PHONE;
+        result.bookingContactPhoneNumber = placeholderManager.getNextPhoneNumber();
       }
 
       if (result.tripContactPhoneNumber) {
-        result.tripContactPhoneNumber = cleanPhoneNumber(result.tripContactPhoneNumber) || PLACEHOLDER_PHONE;
+        result.tripContactPhoneNumber = cleanPhoneNumber(result.tripContactPhoneNumber) || placeholderManager.getNextPhoneNumber();
       } else {
-        result.tripContactPhoneNumber = PLACEHOLDER_PHONE;
+        result.tripContactPhoneNumber = placeholderManager.getNextPhoneNumber();
+      }
+
+      // === APPLY PLACEHOLDER ADDRESSES ===
+      const placeholderPickup = placeholderManager.getPickupAddress();
+      const placeholderDropoff = placeholderManager.getDropoffAddress();
+
+      if (!result.pickUpAddress?.trim() && placeholderPickup) {
+        result.pickUpAddress = placeholderPickup;
+      }
+
+      if (!result.dropOffAddress?.trim() && placeholderDropoff) {
+        result.dropOffAddress = placeholderDropoff;
       }
 
       // === CLEANUP TEMP FIELDS ===
@@ -608,16 +626,23 @@ function normalizeForComparison(value: string | undefined): string {
 }
 
 // Deduplicate contacts based on email, phone, or name
-function deduplicateContacts(data: Record<string, string>[]): Record<string, string>[] {
+function deduplicateContacts(
+  data: Record<string, string>[],
+  basePhoneNumber: string
+): Record<string, string>[] {
   const seenEmails = new Set<string>();
   const seenPhones = new Set<string>();
   const seenNames = new Set<string>();
-  const placeholderPhone = normalizeForComparison(PLACEHOLDER_PHONE);
+  // Extract base phone pattern to detect all sequential placeholder phones
+  const basePlaceholderDigits = basePhoneNumber.replace(/\D/g, '').slice(0, -2); // Remove last 2 digits for pattern matching
 
   return data.filter(row => {
     const email = normalizeForComparison(row.email);
     const phone = normalizeForComparison(row.mobilePhone);
     const name = normalizeForComparison(`${row.firstName}${row.lastName}`);
+
+    // Check if phone is a placeholder (starts with base placeholder pattern)
+    const isPlaceholderPhone = phone && phone.startsWith(basePlaceholderDigits);
 
     // Check for duplicates - email takes priority (skip empty emails)
     if (email) {
@@ -628,7 +653,7 @@ function deduplicateContacts(data: Record<string, string>[]): Record<string, str
     }
 
     // Check phone (only if not placeholder)
-    if (phone && phone !== placeholderPhone) {
+    if (phone && !isPlaceholderPhone) {
       if (seenPhones.has(phone)) {
         return false; // Duplicate phone
       }
@@ -648,7 +673,12 @@ function deduplicateContacts(data: Record<string, string>[]): Record<string, str
 }
 
 // Apply all data transformations
-export function applyPhoneFallback(data: Record<string, string>[]): Record<string, string>[] {
+export function applyPhoneFallback(
+  data: Record<string, string>[],
+  placeholderConfig?: PlaceholderConfig
+): Record<string, string>[] {
+  const placeholderManager = getPlaceholderManager(placeholderConfig);
+
   const cleaned = data
     // First, filter out records with no first AND last name
     .filter(row => {
@@ -777,7 +807,7 @@ export function applyPhoneFallback(data: Record<string, string>[]): Record<strin
       if (phoneToUse) {
         result.mobilePhone = cleanPhoneNumber(phoneToUse);
       } else {
-        result.mobilePhone = PLACEHOLDER_PHONE;
+        result.mobilePhone = placeholderManager.getNextPhoneNumber();
       }
 
       // === EMAIL: Take first if multiple ===
@@ -847,7 +877,8 @@ export function applyPhoneFallback(data: Record<string, string>[]): Record<strin
     });
 
   // Apply deduplication as final step
-  return deduplicateContacts(cleaned);
+  const basePhone = placeholderManager.getConfig().basePhoneNumber || '+1 202-555-0100';
+  return deduplicateContacts(cleaned, basePhone);
 }
 
 // Auto-detect LimoAnywhere format from headers
