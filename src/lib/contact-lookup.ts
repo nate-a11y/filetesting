@@ -24,17 +24,23 @@ export class ContactLookup {
   private contacts: ContactRecord[];
   private emailIndex: Map<string, ContactRecord>;
   private nameIndex: Map<string, ContactRecord[]>;
+  private highestPlaceholderPhone: number | null = null;
   private matchStats = {
     emailMatches: 0,
     nameMatches: 0,
     noMatches: 0,
   };
 
-  constructor(contacts: ContactRecord[]) {
+  constructor(contacts: ContactRecord[], basePhoneNumber?: string) {
     this.contacts = contacts;
     this.emailIndex = new Map();
     this.nameIndex = new Map();
     this.buildIndexes();
+
+    // Find highest placeholder phone number in contacts
+    if (basePhoneNumber) {
+      this.findHighestPlaceholderPhone(basePhoneNumber);
+    }
   }
 
   /**
@@ -59,6 +65,44 @@ export class ContactLookup {
         this.nameIndex.get(nameKey)!.push(contact);
       }
     });
+  }
+
+  /**
+   * Find the highest placeholder phone number in contacts
+   * to continue sequential numbering from there
+   */
+  private findHighestPlaceholderPhone(basePhoneNumber: string): void {
+    const baseDigits = basePhoneNumber.replace(/\D/g, '');
+    const basePattern = baseDigits.slice(0, -2); // Remove last 2 digits for pattern matching
+
+    let maxPhone = parseInt(baseDigits, 10);
+
+    this.contacts.forEach(contact => {
+      if (contact.mobilePhone) {
+        const digits = contact.mobilePhone.replace(/\D/g, '');
+
+        // Check if this is a placeholder phone (matches base pattern)
+        if (digits.startsWith(basePattern)) {
+          const phoneNumber = parseInt(digits, 10);
+          if (!isNaN(phoneNumber) && phoneNumber > maxPhone) {
+            maxPhone = phoneNumber;
+          }
+        }
+      }
+    });
+
+    // Store the highest found
+    this.highestPlaceholderPhone = maxPhone;
+  }
+
+  /**
+   * Get the next phone number to start sequential generation
+   * Returns the number after the highest placeholder in contacts
+   */
+  getNextSequentialStart(): number | null {
+    return this.highestPlaceholderPhone !== null
+      ? this.highestPlaceholderPhone + 1
+      : null;
   }
 
   /**
