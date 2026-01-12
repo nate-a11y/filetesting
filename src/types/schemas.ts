@@ -110,7 +110,7 @@ export interface DuplicateGroup {
 
 // Workflow state
 export interface WorkflowState {
-  step: 'select-workflow' | 'select-format' | 'upload' | 'map-columns' | 'analyze' | 'fix-issues' | 'preview' | 'export';
+  step: 'select-workflow' | 'select-format' | 'upload-contacts' | 'upload' | 'map-columns' | 'analyze' | 'fix-issues' | 'preview' | 'export';
   workflow: WorkflowType | null;
   format: FormatType | null;
   rawData: string[][];
@@ -120,4 +120,5 @@ export interface WorkflowState {
   issues: DataIssue[];
   duplicates: DuplicateGroup[];
   operatorId: string;
+  uploadedContacts?: Record<string, string>[]; // Optional contacts for reservation matching
 }

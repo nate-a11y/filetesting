@@ -1,6 +1,7 @@
 import type { ColumnMapping } from '@/types/schemas';
 import { formatPhone, validatePhone } from './phone-utils';
 import { getPlaceholderManager, type PlaceholderConfig } from './placeholder-config';
+import type { ContactLookup } from './contact-lookup';
 
 // LimoAnywhere contact column mappings
 export const LIMOANYWHERE_CONTACT_MAPPINGS: ColumnMapping[] = [
@@ -364,7 +365,8 @@ function generateReservationPlaceholderEmail(firstName: string, lastName: string
 // Apply transformations specific to reservation data
 export function applyReservationTransforms(
   data: Record<string, string>[],
-  placeholderConfig?: PlaceholderConfig
+  placeholderConfig?: PlaceholderConfig,
+  contactLookup?: ContactLookup
 ): Record<string, string>[] {
   const placeholderManager = getPlaceholderManager(placeholderConfig);
 
@@ -451,6 +453,45 @@ export function applyReservationTransforms(
           result.tripContactLastName,
           result.tripContactPhoneNumber
         );
+      }
+
+      // === CONTACT LOOKUP (if available) ===
+      // Try to match booking contact to existing contacts before using placeholders
+      if (contactLookup && result.bookingContactFirstName && result.bookingContactLastName) {
+        const bookingMatch = contactLookup.findContact(
+          result.bookingContactFirstName,
+          result.bookingContactLastName,
+          result.bookingContactEmail
+        );
+
+        // Use matched contact data if found
+        if (bookingMatch.matchType !== 'none') {
+          if (bookingMatch.email && !result.bookingContactEmail) {
+            result.bookingContactEmail = bookingMatch.email;
+          }
+          if (bookingMatch.mobilePhone && !result.bookingContactPhoneNumber) {
+            result.bookingContactPhoneNumber = bookingMatch.mobilePhone;
+          }
+        }
+      }
+
+      // Try to match trip contact to existing contacts
+      if (contactLookup && result.tripContactFirstName && result.tripContactLastName) {
+        const tripMatch = contactLookup.findContact(
+          result.tripContactFirstName,
+          result.tripContactLastName,
+          result.tripContactEmail
+        );
+
+        // Use matched contact data if found
+        if (tripMatch.matchType !== 'none') {
+          if (tripMatch.email && !result.tripContactEmail) {
+            result.tripContactEmail = tripMatch.email;
+          }
+          if (tripMatch.mobilePhone && !result.tripContactPhoneNumber) {
+            result.tripContactPhoneNumber = tripMatch.mobilePhone;
+          }
+        }
       }
 
       // === FORMAT PHONE NUMBERS ===
