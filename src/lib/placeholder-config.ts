@@ -104,6 +104,18 @@ export class PlaceholderManager {
   }
 
   /**
+   * Set the starting phone number for sequential generation
+   * Useful when continuing from the highest placeholder in an existing import
+   * @param phoneNumber - The full phone number to start from (e.g., 12025550105)
+   */
+  setStartFromNumber(phoneNumber: number): void {
+    const baseNumber = parseInt(this.basePhoneDigits, 10);
+    // Calculate the offset from base
+    const offset = phoneNumber - baseNumber;
+    this.phoneCounter = offset;
+  }
+
+  /**
    * Get current configuration
    */
   getConfig(): PlaceholderConfig {

@@ -58,6 +58,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
     nameMatches: number;
     noMatches: number;
     totalContacts: number;
+    sequentialStartPhone?: string;
   } | null>(null);
 
   // Track multi-file upload stats
@@ -232,7 +233,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
       const countBeforeTransforms = parsed.length;
 
       // Reset placeholder manager with current config before processing
-      resetPlaceholderManager(placeholderConfig);
+      const placeholderManager = resetPlaceholderManager(placeholderConfig);
 
       // Apply workflow-specific transformations
       if (state.workflow === 'contacts') {
@@ -244,14 +245,40 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
         let contactLookup: ContactLookup | undefined;
         if (state.uploadedContacts && state.uploadedContacts.length > 0) {
           const contacts = parseContactsForLookup(state.uploadedContacts);
-          contactLookup = new ContactLookup(contacts);
+          contactLookup = new ContactLookup(contacts, placeholderConfig.basePhoneNumber);
+
+          // Continue sequential numbering from highest placeholder in contacts
+          const nextStart = contactLookup.getNextSequentialStart();
+          if (nextStart !== null) {
+            placeholderManager.setStartFromNumber(nextStart);
+          }
         }
 
         parsed = applyReservationTransforms(parsed, placeholderConfig, contactLookup);
 
         // Update contact match statistics if lookup was used
         if (contactLookup) {
-          setContactMatchStats(contactLookup.getStats());
+          const stats = contactLookup.getStats();
+          const nextStart = contactLookup.getNextSequentialStart();
+
+          // Format the starting phone number for display
+          let sequentialStartPhone: string | undefined;
+          if (nextStart !== null) {
+            const nextDigits = nextStart.toString();
+            if (nextDigits.length === 11 && placeholderConfig.basePhoneNumber.startsWith('+1')) {
+              const areaCode = nextDigits.slice(1, 4);
+              const exchange = nextDigits.slice(4, 7);
+              const lineNumber = nextDigits.slice(7, 11);
+              sequentialStartPhone = `+1 ${areaCode}-${exchange}-${lineNumber}`;
+            } else {
+              sequentialStartPhone = `+${nextDigits}`;
+            }
+          }
+
+          setContactMatchStats({
+            ...stats,
+            sequentialStartPhone,
+          });
         }
       }
 
@@ -848,6 +875,12 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                         <span>Total contacts available: <strong>{contactMatchStats.totalContacts}</strong></span>
                       </div>
                     </div>
+                    {contactMatchStats.sequentialStartPhone && (
+                      <div className="mt-2 text-xs text-gray-600 border-t border-green-200 pt-2">
+                        Sequential placeholder phones starting from: <strong className="text-gray-900">{contactMatchStats.sequentialStartPhone}</strong>
+                        <span className="text-gray-500 ml-1">(continuing after highest placeholder in contacts)</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
