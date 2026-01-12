@@ -5,6 +5,7 @@ import type { WorkflowType, FormatType, ColumnMapping, DataIssue, DuplicateGroup
 import { parseCSV, applyMappings, generateCSV, downloadCSV, CONTACT_HEADERS, RESERVATION_HEADERS } from '@/lib/csv-utils';
 import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
 import { resetPlaceholderManager, type PlaceholderConfig } from '@/lib/placeholder-config';
+import { ContactLookup, parseContactsForLookup } from '@/lib/contact-lookup';
 import { validateContacts, validateReservations, detectDuplicates } from '@/lib/validation';
 import { generatePlaceholderEmail } from '@/lib/email-utils';
 import { cn } from '@/lib/cn';
@@ -51,6 +52,14 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
     placeholderDropoffAddress: undefined,
   });
 
+  // Track contact matching statistics (for reservations)
+  const [contactMatchStats, setContactMatchStats] = useState<{
+    emailMatches: number;
+    nameMatches: number;
+    noMatches: number;
+    totalContacts: number;
+  } | null>(null);
+
   // Track multi-file upload stats
   const [uploadStats, setUploadStats] = useState<{
     fileCount: number;
@@ -83,7 +92,13 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
   // Select format type
   const selectFormat = (format: FormatType) => {
-    setState(prev => ({ ...prev, format, step: 'upload' }));
+    setState(prev => ({
+      ...prev,
+      format,
+      // For reservations, go to upload-contacts step first (optional)
+      // For contacts, go directly to upload
+      step: prev.workflow === 'reservations' ? 'upload-contacts' : 'upload'
+    }));
   };
 
   // Handle file upload - supports multiple files
@@ -161,6 +176,53 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
     }
   }, [state.workflow, state.format]);
 
+  // Handle contacts upload (for reservation matching)
+  const handleContactsUpload = useCallback(async (file: File) => {
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      const { headers, data } = await parseCSV(file);
+
+      // Map the contacts CSV data to contact records
+      const mappedData = applyMappings(headers, data, LIMOANYWHERE_CONTACT_MAPPINGS);
+
+      // Parse for lookup
+      const contacts = parseContactsForLookup(mappedData);
+
+      if (contacts.length === 0) {
+        throw new Error('No valid contacts found in uploaded file');
+      }
+
+      setState(prev => ({
+        ...prev,
+        uploadedContacts: mappedData,
+        step: 'upload', // Proceed to reservation upload
+      }));
+
+      setContactMatchStats({
+        emailMatches: 0,
+        nameMatches: 0,
+        noMatches: 0,
+        totalContacts: contacts.length,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to parse contacts file');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, []);
+
+  // Skip contacts upload and go directly to reservation upload
+  const skipContactsUpload = () => {
+    setState(prev => ({
+      ...prev,
+      uploadedContacts: undefined,
+      step: 'upload',
+    }));
+    setContactMatchStats(null);
+  };
+
   // Process data with mappings
   const processData = useCallback((headers: string[], rawData: string[][], mappings: ColumnMapping[], totalRowsBeforeCleaning?: number) => {
     setIsProcessing(true);
@@ -178,7 +240,19 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
         parsed = applyPhoneFallback(parsed, placeholderConfig);
       } else {
         // Reservation workflow: orderType mapping, name splitting, defaults
-        parsed = applyReservationTransforms(parsed, placeholderConfig);
+        // Create contact lookup if contacts were uploaded
+        let contactLookup: ContactLookup | undefined;
+        if (state.uploadedContacts && state.uploadedContacts.length > 0) {
+          const contacts = parseContactsForLookup(state.uploadedContacts);
+          contactLookup = new ContactLookup(contacts);
+        }
+
+        parsed = applyReservationTransforms(parsed, placeholderConfig, contactLookup);
+
+        // Update contact match statistics if lookup was used
+        if (contactLookup) {
+          setContactMatchStats(contactLookup.getStats());
+        }
       }
 
       // Track dropped rows (only applies to contacts)
@@ -560,6 +634,73 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
           </div>
         )}
 
+        {/* Step: Upload Contacts (Reservations only - Optional) */}
+        {state.step === 'upload-contacts' && (
+          <div className="space-y-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+              <div className="flex items-start gap-3">
+                <Users className="w-5 h-5 text-blue-600 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload Contacts (Optional)</h3>
+                  <p className="text-sm text-gray-700 mb-4">
+                    If you've already imported contacts, you can upload that contact export file here.
+                    This will help us match reservation contacts to existing contacts and use their real
+                    phone numbers and emails instead of generating placeholders.
+                  </p>
+                  <div className="bg-white rounded-lg p-4 mb-4">
+                    <h4 className="font-medium text-gray-900 mb-2">How it works:</h4>
+                    <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
+                      <li>Upload your previously exported contacts CSV</li>
+                      <li>We'll match reservation contacts by email (strongest) or name</li>
+                      <li>Matched contacts use real data instead of placeholders</li>
+                      <li>Only unmatched contacts get placeholder values</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload Contacts CSV
+                </label>
+                <input
+                  type="file"
+                  accept=".csv"
+                  disabled={isProcessing}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleContactsUpload(file);
+                  }}
+                  className="block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-lg file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100
+                    disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={skipContactsUpload}
+                  disabled={isProcessing}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Skip This Step
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Step: Upload */}
         {state.step === 'upload' && (
           <div className="space-y-6">
@@ -680,6 +821,34 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                       <span><strong>{uploadStats.droppedRows}</strong> rows dropped (missing name)</span>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Contact matching stats (reservations only) */}
+            {contactMatchStats && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <Users className="w-5 h-5 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-gray-900 mb-2">Contact Matching Results</h4>
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-900">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-green-600" />
+                        <span><strong>{contactMatchStats.emailMatches}</strong> matched by email</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-blue-600" />
+                        <span><strong>{contactMatchStats.nameMatches}</strong> matched by name</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span><strong>{contactMatchStats.noMatches}</strong> no match (using placeholders)</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <span>Total contacts available: <strong>{contactMatchStats.totalContacts}</strong></span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
