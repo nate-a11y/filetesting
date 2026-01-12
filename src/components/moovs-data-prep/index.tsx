@@ -575,10 +575,11 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                 {/* Base Phone Number */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Base Phone Number
+                    Base Phone Number <span className="text-red-600">*</span>
                   </label>
                   <input
                     type="text"
+                    required
                     value={placeholderConfig.basePhoneNumber || ''}
                     onChange={(e) => setPlaceholderConfig(prev => ({
                       ...prev,
@@ -588,7 +589,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Missing phone numbers will be sequential: base, base+1, base+2, etc.
+                    <span className="font-medium">Required.</span> Missing phone numbers will be sequential: base, base+1, base+2, etc.
                   </p>
                 </div>
 

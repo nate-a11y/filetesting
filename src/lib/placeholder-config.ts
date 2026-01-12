@@ -5,11 +5,11 @@
 
 export interface PlaceholderConfig {
   /**
-   * Base phone number for sequential generation
+   * Base phone number for sequential generation (REQUIRED)
    * Example: '+1 202-555-0100'
    * Missing phone numbers will be: base, base+1, base+2, etc.
    */
-  basePhoneNumber?: string;
+  basePhoneNumber: string;
 
   /**
    * Placeholder address to use when pickup address is missing
