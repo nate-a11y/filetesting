@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import type { WorkflowType, FormatType, ColumnMapping, DataIssue, DuplicateGroup, WorkflowState } from '@/types/schemas';
 import { parseCSV, applyMappings, generateCSV, downloadCSV, CONTACT_HEADERS, RESERVATION_HEADERS } from '@/lib/csv-utils';
-import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
+import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, HUDSON_CONTACT_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, detectHudsonFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
 import { resetPlaceholderManager, type PlaceholderConfig } from '@/lib/placeholder-config';
 import { ContactLookup, parseContactsForLookup } from '@/lib/contact-lookup';
 import { validateContacts, validateReservations, detectDuplicates } from '@/lib/validation';
@@ -93,6 +93,9 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
   // Select format type
   const selectFormat = (format: FormatType) => {
+    // Hudson only supports contacts workflow currently
+    if (format === 'hudson' && state.workflow === 'reservations') return;
+
     setState(prev => ({
       ...prev,
       format,
@@ -134,17 +137,24 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
       const combinedData = parsedFiles.flatMap(f => f.data);
       const totalRowsBeforeCleaning = combinedData.length;
 
-      // Auto-detect format if LimoAnywhere
+      // Auto-detect format
+      const isHudsonFormat = state.format === 'hudson' || detectHudsonFormat(referenceHeaders);
       const isLimoFormat = state.format === 'limoanywhere' || detectLimoAnywhereFormat(referenceHeaders);
 
       // Get appropriate mappings
       const targetFields = state.workflow === 'contacts' ? CONTACT_HEADERS : RESERVATION_HEADERS;
-      const knownMappings = state.workflow === 'contacts'
-        ? LIMOANYWHERE_CONTACT_MAPPINGS
-        : LIMOANYWHERE_RESERVATION_MAPPINGS;
+
+      let knownMappings: ColumnMapping[];
+      if (isHudsonFormat && state.workflow === 'contacts') {
+        knownMappings = HUDSON_CONTACT_MAPPINGS;
+      } else if (state.workflow === 'contacts') {
+        knownMappings = LIMOANYWHERE_CONTACT_MAPPINGS;
+      } else {
+        knownMappings = LIMOANYWHERE_RESERVATION_MAPPINGS;
+      }
 
       let mappings: ColumnMapping[];
-      if (isLimoFormat || state.format === 'limoanywhere') {
+      if (isHudsonFormat || isLimoFormat || state.format === 'limoanywhere') {
         mappings = autoMapColumns(referenceHeaders, targetFields, knownMappings);
       } else {
         // For custom, start with empty mappings (user will map)
@@ -156,7 +166,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
         headers: referenceHeaders,
         rawData: combinedData,
         columnMappings: mappings,
-        step: state.format === 'custom' ? 'map-columns' : 'analyze',
+        step: (state.format === 'custom') ? 'map-columns' : 'analyze',
       }));
 
       // Track upload stats (droppedRows will be updated after processing)
@@ -584,7 +594,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             <span className="text-gray-500" aria-hidden="true">|</span>
             <span className="text-sm text-gray-900">
               {state.workflow === 'contacts' ? 'Contacts' : 'Reservations'}
-              {state.format && ` / ${state.format === 'limoanywhere' ? 'LimoAnywhere' : 'Custom'}`}
+              {state.format && ` / ${state.format === 'limoanywhere' ? 'LimoAnywhere' : state.format === 'hudson' ? 'Hudson' : 'Custom'}`}
             </span>
           </div>
         )}
@@ -637,7 +647,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
         {/* Step: Select Format */}
         {state.step === 'select-format' && (
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-3 gap-6">
             <button
               onClick={() => selectFormat('limoanywhere')}
               className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left"
@@ -646,6 +656,19 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               <h2 className="text-xl font-semibold text-gray-900">LimoAnywhere</h2>
               <p className="text-gray-900 mt-2">
                 Auto-mapped columns for LimoAnywhere exports. Just upload and fix issues.
+              </p>
+            </button>
+            <button
+              onClick={() => selectFormat('hudson')}
+              disabled={state.workflow === 'reservations'}
+              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left disabled:bg-gray-100 disabled:border-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <FileSpreadsheet className="w-12 h-12 text-teal-600 mb-4" aria-hidden="true" />
+              <h2 className="text-xl font-semibold text-gray-900">Hudson</h2>
+              <p className="text-gray-900 mt-2">
+                {state.workflow === 'reservations'
+                  ? 'Hudson reservations are not supported yet. Use contacts workflow instead.'
+                  : 'Auto-mapped columns for Hudson (HGTS) exports. Splits full names automatically.'}
               </p>
             </button>
             <button

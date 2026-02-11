@@ -40,6 +40,13 @@ export const LIMOANYWHERE_CONTACT_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Company Name', targetField: '_companyName' },
 ];
 
+// Hudson (HGTS) contact column mappings
+export const HUDSON_CONTACT_MAPPINGS: ColumnMapping[] = [
+  { sourceColumn: 'Name', targetField: '_fullName' },
+  { sourceColumn: 'EmailAddr', targetField: 'email' },
+  { sourceColumn: 'Telephone', targetField: 'mobilePhone' },
+];
+
 // LimoAnywhere reservation column mappings
 export const LIMOANYWHERE_RESERVATION_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Confirmation #', targetField: 'confirmationNumber' },
@@ -772,6 +779,13 @@ export function applyPhoneFallback(
         result._officePhone = '';
       }
 
+      // === FULL NAME SPLIT (Hudson format: single Name → firstName + lastName) ===
+      if (result._fullName && !result.firstName?.trim() && !result.lastName?.trim()) {
+        const { firstName, lastName } = splitFullName(result._fullName);
+        result.firstName = firstName;
+        result.lastName = lastName;
+      }
+
       // === NAME CLEANING (do this first so we can check again) ===
 
       // Clean pipe characters from names (e.g., "Garson |" → "Garson")
@@ -893,6 +907,7 @@ export function applyPhoneFallback(
       }
 
       // === CLEANUP TEMP FIELDS ===
+      delete result._fullName;
       delete result._homePhone;
       delete result._officePhone;
       delete result._street;
@@ -920,6 +935,17 @@ export function applyPhoneFallback(
   // Apply deduplication as final step
   const basePhone = placeholderManager.getConfig().basePhoneNumber || '+1 202-555-0100';
   return deduplicateContacts(cleaned, basePhone);
+}
+
+// Auto-detect Hudson (HGTS) format from headers
+export function detectHudsonFormat(headers: string[]): boolean {
+  const hudsonKeywords = ['EmailAddr', 'Telephone', 'Name'];
+
+  const matchCount = headers.filter(h =>
+    hudsonKeywords.some(kw => h.toLowerCase() === kw.toLowerCase())
+  ).length;
+
+  return matchCount >= 2;
 }
 
 // Auto-detect LimoAnywhere format from headers
