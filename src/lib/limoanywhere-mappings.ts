@@ -784,7 +784,8 @@ export function applyPhoneFallback(
       if (result._fullName && !result.firstName?.trim() && !result.lastName?.trim()) {
         const { firstName, lastName } = splitFullName(result._fullName);
         result.firstName = firstName;
-        result.lastName = lastName;
+        // Single-word names: use firstName as lastName so the record isn't dropped
+        result.lastName = lastName || firstName;
       }
 
       // === NAME CLEANING (do this first so we can check again) ===
