@@ -866,9 +866,9 @@ export function applyPhoneFallback(
         result.mobilePhone = placeholderManager.getNextPhoneNumber();
       }
 
-      // === EMAIL: Take first if multiple ===
-      if (result.email?.includes(';')) {
-        const emails = result.email.split(';').map(e => e.trim()).filter(Boolean);
+      // === EMAIL: Take first if multiple (semicolon or comma separated) ===
+      if (result.email && (result.email.includes(';') || result.email.includes(','))) {
+        const emails = result.email.split(/[;,]/).map(e => e.trim()).filter(Boolean);
         result.email = emails[0] || '';
       }
 

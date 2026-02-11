@@ -33,32 +33,56 @@ export function validatePhone(phone: string, country?: CountryCode): {
     return { isValid: false, error: 'Phone number is required' };
   }
 
-  const cleanPhone = phone.replace(/[^\d+]/g, '');
-  const targetCountry = country || detectPhoneCountry(phone);
+  let cleanPhone = phone.replace(/[^\d+]/g, '');
+
+  // Convert 00 international dialing prefix to +
+  if (cleanPhone.startsWith('00') && !cleanPhone.startsWith('+')) {
+    cleanPhone = '+' + cleanPhone.slice(2);
+  }
+
+  const targetCountry = country || detectPhoneCountry(cleanPhone);
 
   try {
-    if (!isValidPhoneNumber(cleanPhone, targetCountry)) {
-      // Try to provide a suggestion
-      const digits = cleanPhone.replace(/\D/g, '');
-      if (digits.length === 10 && targetCountry === 'US') {
-        return {
-          isValid: false,
-          error: 'Invalid phone number format',
-          suggestion: `+1${digits}`,
-        };
+    // First try: validate the cleaned phone with detected country
+    if (isValidPhoneNumber(cleanPhone, targetCountry)) {
+      const parsed = parsePhoneNumber(cleanPhone, targetCountry);
+      if (parsed) {
+        return { isValid: true, formatted: parsed.formatInternational() };
       }
-      return { isValid: false, error: 'Invalid phone number format' };
     }
 
-    const parsed = parsePhoneNumber(cleanPhone, targetCountry);
-    if (!parsed) {
-      return { isValid: false, error: 'Could not parse phone number' };
+    // Second try: parse with original string (spaces help libphonenumber handle trunk prefixes)
+    try {
+      const parsed = parsePhoneNumber(phone.trim());
+      if (parsed?.isValid()) {
+        return { isValid: true, formatted: parsed.formatInternational() };
+      }
+    } catch {
+      // Continue to next attempt
     }
 
-    return {
-      isValid: true,
-      formatted: parsed.formatInternational(),
-    };
+    // Third try: auto-detect from cleaned phone (handles +CC formats)
+    if (cleanPhone.startsWith('+')) {
+      try {
+        const parsed = parsePhoneNumber(cleanPhone);
+        if (parsed?.isValid()) {
+          return { isValid: true, formatted: parsed.formatInternational() };
+        }
+      } catch {
+        // Continue to suggestion
+      }
+    }
+
+    // Suggestion for 10-digit US numbers
+    const digits = cleanPhone.replace(/\D/g, '');
+    if (digits.length === 10 && targetCountry === 'US') {
+      return {
+        isValid: false,
+        error: 'Invalid phone number format',
+        suggestion: `+1${digits}`,
+      };
+    }
+    return { isValid: false, error: 'Invalid phone number format' };
   } catch (error) {
     return {
       isValid: false,
