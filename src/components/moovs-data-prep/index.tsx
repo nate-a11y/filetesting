@@ -777,7 +777,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                       basePhoneNumber: e.target.value
                     }))}
                     placeholder="+1 202-555-0100"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500 bg-white"
                   />
                   <p className="mt-1 text-xs text-gray-500">
                     <span className="font-medium">Required.</span> Missing phone numbers will be sequential: base, base+1, base+2, etc.
@@ -799,7 +799,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                           placeholderPickupAddress: e.target.value || undefined
                         }))}
                         placeholder="123 Main St, Seattle, WA 98101"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500 bg-white"
                       />
                       <p className="mt-1 text-xs text-gray-500">
                         Address to use when pickup address is missing. Leave empty to not use a placeholder.
@@ -818,7 +818,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
                           placeholderDropoffAddress: e.target.value || undefined
                         }))}
                         placeholder="456 Market St, Seattle, WA 98102"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder:text-gray-500 bg-white"
                       />
                       <p className="mt-1 text-xs text-gray-500">
                         Address to use when dropoff address is missing. Leave empty to not use a placeholder.
