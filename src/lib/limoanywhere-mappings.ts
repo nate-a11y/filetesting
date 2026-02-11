@@ -732,9 +732,10 @@ export function applyPhoneFallback(
     .filter(row => {
       const firstName = row.firstName?.trim();
       const lastName = row.lastName?.trim();
-      // Keep record only if it has at least one name part
+      const fullName = row._fullName?.trim();
+      // Keep record only if it has at least one name part (or a full name to split)
       // After name cleaning, we'll check again
-      return firstName || lastName;
+      return firstName || lastName || fullName;
     })
     .map(row => {
       const result = { ...row };
