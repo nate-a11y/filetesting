@@ -2,8 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import type { WorkflowType, FormatType, ColumnMapping, DataIssue, DuplicateGroup, WorkflowState } from '@/types/schemas';
-import { parseCSV, applyMappings, generateCSV, downloadCSV, CONTACT_HEADERS, RESERVATION_HEADERS } from '@/lib/csv-utils';
-import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, HUDSON_CONTACT_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, detectHudsonFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
+import { parseCSV, applyMappings, generateCSV, downloadCSV, CONTACT_HEADERS, RESERVATION_HEADERS, HUDSON_BOOKING_HEADERS } from '@/lib/csv-utils';
+import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, HUDSON_CONTACT_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, detectHudsonFormat, applyPhoneFallback, applyReservationTransforms, processHudsonBookingReport } from '@/lib/limoanywhere-mappings';
 import { resetPlaceholderManager, type PlaceholderConfig } from '@/lib/placeholder-config';
 import { ContactLookup, parseContactsForLookup } from '@/lib/contact-lookup';
 import { validateContacts, validateReservations, detectDuplicates } from '@/lib/validation';
@@ -93,15 +93,13 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
   // Select format type
   const selectFormat = (format: FormatType) => {
-    // Hudson only supports contacts workflow currently
-    if (format === 'hudson' && state.workflow === 'reservations') return;
-
     setState(prev => ({
       ...prev,
       format,
-      // For reservations, go to upload-contacts step first (optional)
-      // For contacts, go directly to upload
-      step: prev.workflow === 'reservations' ? 'upload-contacts' : 'upload'
+      // Hudson reservations skip straight to upload (no contacts matching step)
+      // LimoAnywhere reservations go to upload-contacts step first (optional)
+      // Contacts go directly to upload
+      step: prev.workflow === 'reservations' && format !== 'hudson' ? 'upload-contacts' : 'upload'
     }));
   };
 
@@ -140,6 +138,31 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
       // Auto-detect format
       const isHudsonFormat = state.format === 'hudson' || detectHudsonFormat(referenceHeaders);
       const isLimoFormat = state.format === 'limoanywhere' || detectLimoAnywhereFormat(referenceHeaders);
+
+      // Hudson booking report: custom processing path
+      if (isHudsonFormat && state.workflow === 'reservations') {
+        const { groups } = processHudsonBookingReport(referenceHeaders, combinedData);
+        const totalProcessed = Object.values(groups).reduce((sum, g) => sum + g.length, 0);
+
+        setState(prev => ({
+          ...prev,
+          headers: referenceHeaders,
+          rawData: combinedData,
+          hudsonGroups: groups,
+          parsedData: [],
+          issues: [],
+          duplicates: [],
+          step: 'analyze',
+        }));
+
+        setUploadStats({
+          fileCount: files.length,
+          totalRows: totalRowsBeforeCleaning,
+          droppedRows: totalRowsBeforeCleaning - totalProcessed,
+        });
+
+        return;
+      }
 
       // Get appropriate mappings
       const targetFields = state.workflow === 'contacts' ? CONTACT_HEADERS : RESERVATION_HEADERS;
@@ -486,6 +509,30 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
     downloadCSV(csv, filename);
   };
 
+  // Export Hudson booking report (multiple files by airport group)
+  const exportHudsonBookingReport = async () => {
+    if (!state.hudsonGroups) return;
+    const timestamp = Date.now();
+
+    const entries = Object.entries(state.hudsonGroups);
+    for (let i = 0; i < entries.length; i++) {
+      const [groupKey, rows] = entries[i];
+      if (rows.length === 0) continue;
+      const csv = generateCSV(rows, HUDSON_BOOKING_HEADERS);
+      const filename = `moovs_bookingreport_${groupKey}_${timestamp}.csv`;
+      downloadCSV(csv, filename);
+      // Small delay between downloads so the browser doesn't block them
+      if (i < entries.length - 1) {
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+  };
+
+  // Check if this is a Hudson booking report view
+  const isHudsonBookingReport = state.format === 'hudson' && state.workflow === 'reservations' && state.hudsonGroups;
+  const hudsonGroupEntries = isHudsonBookingReport ? Object.entries(state.hudsonGroups!) : [];
+  const hudsonTotalTrips = hudsonGroupEntries.reduce((sum, [, rows]) => sum + rows.length, 0);
+
   // Extract unique contacts from reservations (for separate contacts CSV)
   const extractContactsFromReservations = useCallback(() => {
     if (state.workflow !== 'reservations') return [];
@@ -660,14 +707,13 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             </button>
             <button
               onClick={() => selectFormat('hudson')}
-              disabled={state.workflow === 'reservations'}
-              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left disabled:bg-gray-100 disabled:border-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
+              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left"
             >
               <FileSpreadsheet className="w-12 h-12 text-teal-600 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">Hudson</h2>
               <p className="text-gray-900 mt-2">
                 {state.workflow === 'reservations'
-                  ? 'Hudson reservations are not supported yet. Use contacts workflow instead.'
+                  ? 'Processes booking reports with airport detection and splits by airport.'
                   : 'Auto-mapped columns for Hudson (HGTS) exports. Splits full names automatically.'}
               </p>
             </button>
@@ -909,136 +955,167 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               </div>
             )}
 
-            {/* Summary */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Analysis Results</h2>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <p className="text-3xl font-bold text-green-600">{readyCount}</p>
-                  <p className="text-sm text-gray-900">Ready to Import</p>
-                </div>
-                <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                  <p className="text-3xl font-bold text-yellow-700">{totalErrors}</p>
-                  <p className="text-sm text-gray-900">Issues to Fix</p>
-                </div>
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <p className="text-3xl font-bold text-blue-700">{state.duplicates.length}</p>
-                  <p className="text-sm text-gray-900">Duplicate Groups</p>
-                </div>
-              </div>
-              {placeholderPhoneCount > 0 && (
-                <p className="mt-4 text-sm text-gray-600 text-center">
-                  ℹ️ {placeholderPhoneCount} contacts using placeholder phone (no phone was available in source data)
-                </p>
-              )}
-            </div>
-
-            {/* Issues breakdown */}
-            {totalErrors > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Issues to Fix</h3>
-                  {missingEmailCount > 0 && (
-                    <button
-                      onClick={generateAllPlaceholderEmails}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
-                    >
-                      Generate {missingEmailCount} Placeholder Emails
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  {missingEmailCount > 0 && (
-                    <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="w-5 h-5 text-yellow-500" />
-                        <span className="text-gray-900">{missingEmailCount} missing emails</span>
-                      </div>
-                      <span className="text-sm text-gray-500">Will generate placeholder emails</span>
-                    </div>
-                  )}
-                  {invalidPhoneCount > 0 && (
-                    <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="w-5 h-5 text-red-500" />
-                        <span className="text-gray-900">{invalidPhoneCount} invalid phone numbers</span>
-                      </div>
-                      <span className="text-sm text-gray-500">Review manually</span>
-                    </div>
-                  )}
-                  {Object.entries(issuesByType)
-                    .filter(([key]) => !key.includes('email') && !key.includes('Email') && !key.includes('phone') && !key.includes('Phone') && !key.includes('info'))
-                    .map(([key, count]) => (
-                      <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="w-5 h-5 text-gray-500" />
-                          <span className="text-gray-900">{count} {key.replace('-', ' ')}</span>
-                        </div>
+            {/* Hudson Booking Report Summary */}
+            {isHudsonBookingReport ? (
+              <>
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Booking Report Summary</h2>
+                  <div className="text-center p-4 bg-green-50 rounded-lg mb-4">
+                    <p className="text-3xl font-bold text-green-600">{hudsonTotalTrips}</p>
+                    <p className="text-sm text-gray-900">Total Trips</p>
+                  </div>
+                  <div className="space-y-2">
+                    {hudsonGroupEntries.map(([groupKey, rows]) => (
+                      <div key={groupKey} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <span className="font-medium text-gray-900">{groupKey.replace('_', ' ')}</span>
+                        <span className="text-sm text-gray-600">{rows.length} trips</span>
                       </div>
                     ))}
-                </div>
-              </div>
-            )}
-
-            {/* Duplicate Merger */}
-            {state.duplicates.length > 0 && (
-              <DuplicateMerger
-                duplicates={state.duplicates}
-                onResolve={resolveDuplicate}
-                onResolveAll={resolveAllDuplicates}
-              />
-            )}
-
-            {/* Auto-fix button */}
-            {totalErrors > 0 && (
-              <button
-                onClick={autoFixIssues}
-                className="w-full py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium"
-              >
-                Auto-Fix All Issues with Suggestions
-              </button>
-            )}
-
-            {/* Preview and Export */}
-            <div className="space-y-4">
-              <div className="flex gap-4">
-                <button
-                  onClick={() => setState(prev => ({ ...prev, step: 'preview' }))}
-                  className="flex-1 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium"
-                >
-                  Preview Data
-                </button>
-                <button
-                  onClick={exportCSV}
-                  className="flex-1 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
-                >
-                  <Download className="w-5 h-5" />
-                  {state.workflow === 'contacts' ? 'Export Contacts CSV' : 'Export Reservations CSV'}
-                </button>
-              </div>
-
-              {/* Additional export for contacts from reservations */}
-              {state.workflow === 'reservations' && uniqueContactsCount > 0 && (
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">New Contacts to Create</p>
-                      <p className="text-sm text-gray-600">
-                        {uniqueContactsCount} unique contacts found in reservations.
-                        Import these to Moovs first to avoid duplicates.
-                      </p>
-                    </div>
-                    <button
-                      onClick={exportContactsFromReservations}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium flex items-center gap-2"
-                    >
-                      <Users className="w-4 h-4" />
-                      Export Contacts CSV
-                    </button>
                   </div>
                 </div>
-              )}
-            </div>
+
+                <button
+                  onClick={exportHudsonBookingReport}
+                  className="w-full py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
+                >
+                  <Download className="w-5 h-5" />
+                  Export All Files ({hudsonGroupEntries.length} files)
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Summary */}
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Analysis Results</h2>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <p className="text-3xl font-bold text-green-600">{readyCount}</p>
+                      <p className="text-sm text-gray-900">Ready to Import</p>
+                    </div>
+                    <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                      <p className="text-3xl font-bold text-yellow-700">{totalErrors}</p>
+                      <p className="text-sm text-gray-900">Issues to Fix</p>
+                    </div>
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <p className="text-3xl font-bold text-blue-700">{state.duplicates.length}</p>
+                      <p className="text-sm text-gray-900">Duplicate Groups</p>
+                    </div>
+                  </div>
+                  {placeholderPhoneCount > 0 && (
+                    <p className="mt-4 text-sm text-gray-600 text-center">
+                      ℹ️ {placeholderPhoneCount} contacts using placeholder phone (no phone was available in source data)
+                    </p>
+                  )}
+                </div>
+
+                {/* Issues breakdown */}
+                {totalErrors > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Issues to Fix</h3>
+                      {missingEmailCount > 0 && (
+                        <button
+                          onClick={generateAllPlaceholderEmails}
+                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
+                        >
+                          Generate {missingEmailCount} Placeholder Emails
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      {missingEmailCount > 0 && (
+                        <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="w-5 h-5 text-yellow-500" />
+                            <span className="text-gray-900">{missingEmailCount} missing emails</span>
+                          </div>
+                          <span className="text-sm text-gray-500">Will generate placeholder emails</span>
+                        </div>
+                      )}
+                      {invalidPhoneCount > 0 && (
+                        <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="w-5 h-5 text-red-500" />
+                            <span className="text-gray-900">{invalidPhoneCount} invalid phone numbers</span>
+                          </div>
+                          <span className="text-sm text-gray-500">Review manually</span>
+                        </div>
+                      )}
+                      {Object.entries(issuesByType)
+                        .filter(([key]) => !key.includes('email') && !key.includes('Email') && !key.includes('phone') && !key.includes('Phone') && !key.includes('info'))
+                        .map(([key, count]) => (
+                          <div key={key} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="w-5 h-5 text-gray-500" />
+                              <span className="text-gray-900">{count} {key.replace('-', ' ')}</span>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Duplicate Merger */}
+                {state.duplicates.length > 0 && (
+                  <DuplicateMerger
+                    duplicates={state.duplicates}
+                    onResolve={resolveDuplicate}
+                    onResolveAll={resolveAllDuplicates}
+                  />
+                )}
+
+                {/* Auto-fix button */}
+                {totalErrors > 0 && (
+                  <button
+                    onClick={autoFixIssues}
+                    className="w-full py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium"
+                  >
+                    Auto-Fix All Issues with Suggestions
+                  </button>
+                )}
+
+                {/* Preview and Export */}
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setState(prev => ({ ...prev, step: 'preview' }))}
+                      className="flex-1 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium"
+                    >
+                      Preview Data
+                    </button>
+                    <button
+                      onClick={exportCSV}
+                      className="flex-1 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-5 h-5" />
+                      {state.workflow === 'contacts' ? 'Export Contacts CSV' : 'Export Reservations CSV'}
+                    </button>
+                  </div>
+
+                  {/* Additional export for contacts from reservations */}
+                  {state.workflow === 'reservations' && uniqueContactsCount > 0 && (
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">New Contacts to Create</p>
+                          <p className="text-sm text-gray-600">
+                            {uniqueContactsCount} unique contacts found in reservations.
+                            Import these to Moovs first to avoid duplicates.
+                          </p>
+                        </div>
+                        <button
+                          onClick={exportContactsFromReservations}
+                          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium flex items-center gap-2"
+                        >
+                          <Users className="w-4 h-4" />
+                          Export Contacts CSV
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
