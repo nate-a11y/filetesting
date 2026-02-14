@@ -94,15 +94,6 @@ export const CONTACT_HEADERS = [
   'preferences',
 ];
 
-// Hudson booking report output headers
-export const HUDSON_BOOKING_HEADERS = [
-  'First Name', 'Last Name', 'Email', 'Travel Date',
-  'Pickup Location', 'Dropoff Location',
-  'Pickup Airport IATA', 'Pickup Airline IATA', 'Pickup Flight Number',
-  'Dropoff Airport IATA', 'Dropoff Airline IATA', 'Dropoff Flight Number',
-  'Luggage Count', 'Passenger Count', 'Phone Number', 'Trip Time',
-];
-
 // OneSchema Reservation headers
 export const RESERVATION_HEADERS = [
   'operatorId',

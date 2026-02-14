@@ -121,5 +121,4 @@ export interface WorkflowState {
   duplicates: DuplicateGroup[];
   operatorId: string;
   uploadedContacts?: Record<string, string>[]; // Optional contacts for reservation matching
-  hudsonGroups?: Record<string, Record<string, string>[]>; // Hudson booking report groups by airport+direction
 }
