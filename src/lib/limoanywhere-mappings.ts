@@ -47,6 +47,21 @@ export const HUDSON_CONTACT_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Telephone', targetField: 'mobilePhone' },
 ];
 
+// Hudson (HGTS) reservation column mappings
+export const HUDSON_RESERVATION_MAPPINGS: ColumnMapping[] = [
+  { sourceColumn: 'ID', targetField: 'confirmationNumber' },
+  { sourceColumn: 'PickupTOD', targetField: '_pickupTOD' },
+  { sourceColumn: 'Name', targetField: '_bookingFullName' },
+  { sourceColumn: 'EmailAddr', targetField: 'bookingContactEmail' },
+  { sourceColumn: 'PAX', targetField: 'totalGroupSize' },
+  { sourceColumn: 'Telephone', targetField: 'bookingContactPhoneNumber' },
+  { sourceColumn: 'PickupLocation', targetField: '_pickupLocation' },
+  { sourceColumn: 'PickupAddr', targetField: 'pickUpAddress' },
+  { sourceColumn: 'DropOffLocation', targetField: '_dropoffLocation' },
+  { sourceColumn: 'DropOffAddr', targetField: 'dropOffAddress' },
+  { sourceColumn: 'Fare', targetField: 'baseRateAmt' },
+];
+
 // LimoAnywhere reservation column mappings
 export const LIMOANYWHERE_RESERVATION_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Confirmation #', targetField: 'confirmationNumber' },
@@ -369,6 +384,81 @@ function generateReservationPlaceholderEmail(firstName: string, lastName: string
   return `${cleanFirst}.${cleanLast}${suffix}@import.moovs.com`;
 }
 
+// Parse Hudson datetime: "2/16/2026 4:15:00 AM" → { date: "2/16/2026", time: "4:15 AM" }
+function parseHudsonDateTime(value: string | undefined): { date: string; time: string } {
+  if (!value?.trim()) return { date: '', time: '' };
+
+  const trimmed = value.trim();
+  // Match: date portion  time portion (with seconds)  AM/PM
+  const match = trimmed.match(/^(\d{1,2}\/\d{1,2}\/\d{4})\s+(\d{1,2}:\d{2})(?::\d{2})?\s*(AM|PM)$/i);
+  if (match) {
+    return {
+      date: match[1],
+      time: `${match[2]} ${match[3].toUpperCase()}`,
+    };
+  }
+
+  // Fallback: try to split on first space after date
+  const spaceIdx = trimmed.indexOf(' ');
+  if (spaceIdx > 0) {
+    return {
+      date: trimmed.slice(0, spaceIdx),
+      time: trimmed.slice(spaceIdx + 1).replace(/:\d{2}\s/, ' ').trim(),
+    };
+  }
+
+  return { date: trimmed, time: '' };
+}
+
+// Clean Hudson location string:
+// "*01.ONT - Ontario International Airport" → "Ontario International Airport"
+// "*[SELECT LOCATION...]" → ""
+function cleanHudsonLocation(location: string | undefined): string {
+  if (!location?.trim()) return '';
+
+  let cleaned = location.trim();
+
+  // Remove placeholder selections
+  if (/\*?\[SELECT/i.test(cleaned)) return '';
+
+  // Remove leading "*NN." prefix (e.g., "*01.ONT - ")
+  cleaned = cleaned.replace(/^\*?\d+\.\s*/, '');
+
+  // Remove airport code prefix: "ONT - Ontario..." → "Ontario..."
+  cleaned = cleaned.replace(/^[A-Z]{3}\s*-\s*/, '');
+
+  return cleaned.trim();
+}
+
+// Build Hudson address from location + address fields
+function buildHudsonAddress(location: string | undefined, address: string | undefined): string {
+  const cleanedLocation = cleanHudsonLocation(location);
+  const cleanedAddress = address?.trim() || '';
+
+  if (cleanedLocation && cleanedAddress) {
+    // If address already contains the location name, just use address
+    if (cleanedAddress.toLowerCase().includes(cleanedLocation.toLowerCase())) {
+      return cleanedAddress;
+    }
+    return `${cleanedLocation}, ${cleanedAddress}`;
+  }
+
+  return cleanedLocation || cleanedAddress;
+}
+
+// Detect airport in Hudson location string → returns orderType direction or null
+function detectAirportInLocation(location: string | undefined): string | null {
+  if (!location?.trim()) return null;
+
+  const normalized = location.toLowerCase();
+  // Hudson airport patterns: contains "airport", or has "*NN.XXX - " IATA code prefix
+  if (/airport/i.test(normalized) || /^\*?\d+\.[A-Z]{3}\s*-/i.test(location.trim())) {
+    return 'airport';
+  }
+
+  return null;
+}
+
 // Apply transformations specific to reservation data
 export function applyReservationTransforms(
   data: Record<string, string>[],
@@ -380,6 +470,48 @@ export function applyReservationTransforms(
   return data
     .map(row => {
       const result = { ...row };
+
+      // === HUDSON-SPECIFIC TRANSFORMS ===
+      // Parse combined datetime field
+      if (result._pickupTOD) {
+        const { date, time } = parseHudsonDateTime(result._pickupTOD);
+        if (!result.pickUpDate) result.pickUpDate = date;
+        if (!result.pickUpTime) result.pickUpTime = time;
+        delete result._pickupTOD;
+      }
+
+      // Build addresses from location + address fields
+      if (result._pickupLocation || result.pickUpAddress) {
+        const builtAddress = buildHudsonAddress(result._pickupLocation, result.pickUpAddress);
+        if (builtAddress) result.pickUpAddress = builtAddress;
+      }
+      if (result._dropoffLocation || result.dropOffAddress) {
+        const builtAddress = buildHudsonAddress(result._dropoffLocation, result.dropOffAddress);
+        if (builtAddress) result.dropOffAddress = builtAddress;
+      }
+
+      // Detect airport-based order type from locations
+      if (!result.orderType || result.orderType === 'point-to-point') {
+        const pickupAirport = detectAirportInLocation(result._pickupLocation);
+        const dropoffAirport = detectAirportInLocation(result._dropoffLocation);
+
+        if (pickupAirport && dropoffAirport) {
+          result.orderType = 'airport';
+        } else if (pickupAirport) {
+          result.orderType = 'airport-pick-up';
+        } else if (dropoffAirport) {
+          result.orderType = 'airport-drop-off';
+        }
+      }
+
+      // Clean up Hudson temp location fields
+      delete result._pickupLocation;
+      delete result._dropoffLocation;
+
+      // Strip $ and commas from fare
+      if (result.baseRateAmt) {
+        result.baseRateAmt = result.baseRateAmt.replace(/[$,]/g, '').trim();
+      }
 
       // === ORDER TYPE TRANSFORMATION ===
       if (result.orderType) {

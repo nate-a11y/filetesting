@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import type { WorkflowType, FormatType, ColumnMapping, DataIssue, DuplicateGroup, WorkflowState } from '@/types/schemas';
 import { parseCSV, applyMappings, generateCSV, downloadCSV, CONTACT_HEADERS, RESERVATION_HEADERS } from '@/lib/csv-utils';
-import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, HUDSON_CONTACT_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, detectHudsonFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
+import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, HUDSON_CONTACT_MAPPINGS, HUDSON_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, detectHudsonFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
 import { resetPlaceholderManager, type PlaceholderConfig } from '@/lib/placeholder-config';
 import { ContactLookup, parseContactsForLookup } from '@/lib/contact-lookup';
 import { validateContacts, validateReservations, detectDuplicates } from '@/lib/validation';
@@ -93,9 +93,6 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
   // Select format type
   const selectFormat = (format: FormatType) => {
-    // Hudson only supports contacts workflow currently
-    if (format === 'hudson' && state.workflow === 'reservations') return;
-
     setState(prev => ({
       ...prev,
       format,
@@ -147,6 +144,8 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
       let knownMappings: ColumnMapping[];
       if (isHudsonFormat && state.workflow === 'contacts') {
         knownMappings = HUDSON_CONTACT_MAPPINGS;
+      } else if (isHudsonFormat && state.workflow === 'reservations') {
+        knownMappings = HUDSON_RESERVATION_MAPPINGS;
       } else if (state.workflow === 'contacts') {
         knownMappings = LIMOANYWHERE_CONTACT_MAPPINGS;
       } else {
@@ -195,8 +194,23 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
     try {
       const { headers, data } = await parseCSV(file);
 
+      // Detect if already in moovs output format (e.g., previously exported contacts CSV)
+      const isMoovsFormat = headers.includes('firstName');
+
+      // Choose appropriate mappings
+      const contactMappings: ColumnMapping[] = isMoovsFormat
+        ? [
+            { sourceColumn: 'firstName', targetField: 'firstName' },
+            { sourceColumn: 'lastName', targetField: 'lastName' },
+            { sourceColumn: 'mobilePhone', targetField: 'mobilePhone' },
+            { sourceColumn: 'email', targetField: 'email' },
+          ]
+        : detectHudsonFormat(headers)
+          ? HUDSON_CONTACT_MAPPINGS
+          : LIMOANYWHERE_CONTACT_MAPPINGS;
+
       // Map the contacts CSV data to contact records
-      const mappedData = applyMappings(headers, data, LIMOANYWHERE_CONTACT_MAPPINGS);
+      const mappedData = applyMappings(headers, data, contactMappings);
 
       // Parse for lookup
       const contacts = parseContactsForLookup(mappedData);
@@ -660,15 +674,12 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             </button>
             <button
               onClick={() => selectFormat('hudson')}
-              disabled={state.workflow === 'reservations'}
-              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left disabled:bg-gray-100 disabled:border-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
+              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left"
             >
               <FileSpreadsheet className="w-12 h-12 text-teal-600 mb-4" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-gray-900">Hudson</h2>
               <p className="text-gray-900 mt-2">
-                {state.workflow === 'reservations'
-                  ? 'Hudson reservations are not supported yet. Use contacts workflow instead.'
-                  : 'Auto-mapped columns for Hudson (HGTS) exports. Splits full names automatically.'}
+                Auto-mapped columns for Hudson (HGTS) exports. Splits full names automatically.
               </p>
             </button>
             <button
