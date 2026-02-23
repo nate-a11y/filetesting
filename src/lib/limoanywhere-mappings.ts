@@ -62,6 +62,49 @@ export const HUDSON_RESERVATION_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Fare', targetField: 'baseRateAmt' },
 ];
 
+// Book Rides Online (BRO) reservation column mappings
+export const BOOKRIDESONLINE_RESERVATION_MAPPINGS: ColumnMapping[] = [
+  { sourceColumn: 'BookingNumber', targetField: 'confirmationNumber' },
+  { sourceColumn: 'RunStartDate', targetField: '_pickupTOD' },
+  { sourceColumn: 'RunEndDate', targetField: '_dropoffTOD' },
+  { sourceColumn: 'ClientName', targetField: '_bookingFullName' },
+  { sourceColumn: 'ClientEmail', targetField: 'bookingContactEmail' },
+  { sourceColumn: 'ClientPhone', targetField: 'bookingContactPhoneNumber' },
+  { sourceColumn: 'PassengerName', targetField: '_passengerFullName' },
+  { sourceColumn: 'PassengerEmail', targetField: 'tripContactEmail' },
+  { sourceColumn: 'PassengerPhone', targetField: 'tripContactPhoneNumber' },
+  { sourceColumn: 'PassengerCount', targetField: 'totalGroupSize' },
+  { sourceColumn: 'PickupAddress', targetField: 'pickUpAddress' },
+  { sourceColumn: 'DropoffAddress', targetField: 'dropOffAddress' },
+  { sourceColumn: 'PickupAirport', targetField: '_pickupAirport' },
+  { sourceColumn: 'DropoffAirport', targetField: '_dropoffAirport' },
+  { sourceColumn: 'TotalAmount', targetField: 'baseRateAmt' },
+  { sourceColumn: 'Vehicle', targetField: 'vehicle' },
+  { sourceColumn: 'VehicleType', targetField: '_vehicleType' },
+  { sourceColumn: 'ServiceType', targetField: 'orderType' },
+  { sourceColumn: 'Stops', targetField: 'stop1Address' },
+  { sourceColumn: 'CustomerNotes', targetField: '_customerNotes' },
+  { sourceColumn: 'AdditionalNotes', targetField: '_additionalNotes' },
+  { sourceColumn: 'DriverNotes', targetField: '_driverNotes' },
+  { sourceColumn: 'Notes', targetField: '_notes' },
+  { sourceColumn: 'CompanyName', targetField: '_companyName' },
+  { sourceColumn: 'ArrivalAirline', targetField: '_arrivalAirline' },
+  { sourceColumn: 'ArrivalFlightNumber', targetField: '_arrivalFlightNumber' },
+  { sourceColumn: 'DepartureAirline', targetField: '_departureAirline' },
+  { sourceColumn: 'DepartureFlightNumber', targetField: '_departureFlightNumber' },
+];
+
+// Book Rides Online (BRO) contact column mappings
+export const BOOKRIDESONLINE_CONTACT_MAPPINGS: ColumnMapping[] = [
+  { sourceColumn: 'FirstName', targetField: 'firstName' },
+  { sourceColumn: 'LastName', targetField: 'lastName' },
+  { sourceColumn: 'Email', targetField: 'email' },
+  { sourceColumn: 'Phone', targetField: 'mobilePhone' },
+  { sourceColumn: 'Address', targetField: 'homeAddress' },
+  { sourceColumn: 'Company', targetField: '_companyName' },
+  { sourceColumn: 'Notes', targetField: 'preferences' },
+];
+
 // LimoAnywhere reservation column mappings
 export const LIMOANYWHERE_RESERVATION_MAPPINGS: ColumnMapping[] = [
   { sourceColumn: 'Confirmation #', targetField: 'confirmationNumber' },
@@ -507,6 +550,74 @@ export function applyReservationTransforms(
       // Clean up Hudson temp location fields
       delete result._pickupLocation;
       delete result._dropoffLocation;
+
+      // === BOOK RIDES ONLINE (BRO) SPECIFIC TRANSFORMS ===
+      // Parse combined dropoff datetime field
+      if (result._dropoffTOD) {
+        const { date, time } = parseHudsonDateTime(result._dropoffTOD);
+        if (!result.dropOffDate) result.dropOffDate = date;
+        if (!result.dropOffTime) result.dropOffTime = time;
+        delete result._dropoffTOD;
+      }
+
+      // Airport detection from BRO airport fields
+      if (result._pickupAirport || result._dropoffAirport) {
+        const hasPickupAirport = !!result._pickupAirport?.trim();
+        const hasDropoffAirport = !!result._dropoffAirport?.trim();
+
+        if (!result.orderType || result.orderType === 'point-to-point') {
+          if (hasPickupAirport && hasDropoffAirport) {
+            result.orderType = 'airport';
+          } else if (hasPickupAirport) {
+            result.orderType = 'airport-pick-up';
+          } else if (hasDropoffAirport) {
+            result.orderType = 'airport-drop-off';
+          }
+        }
+
+        delete result._pickupAirport;
+        delete result._dropoffAirport;
+      }
+
+      // Vehicle fallback: use _vehicleType if vehicle is empty
+      if (!result.vehicle?.trim() && result._vehicleType?.trim()) {
+        result.vehicle = result._vehicleType;
+      }
+      delete result._vehicleType;
+
+      // Combine notes fields into tripNotes
+      const notesParts: string[] = [];
+      for (const field of ['_customerNotes', '_additionalNotes', '_driverNotes', '_notes'] as const) {
+        if (result[field]?.trim()) {
+          notesParts.push(result[field]!.trim());
+        }
+        delete result[field];
+      }
+
+      // Append flight info to notes
+      if (result._arrivalAirline?.trim() || result._arrivalFlightNumber?.trim()) {
+        const airline = result._arrivalAirline?.trim() || '';
+        const flight = result._arrivalFlightNumber?.trim() || '';
+        notesParts.push(`Arrival: ${airline} ${flight}`.trim());
+      }
+      if (result._departureAirline?.trim() || result._departureFlightNumber?.trim()) {
+        const airline = result._departureAirline?.trim() || '';
+        const flight = result._departureFlightNumber?.trim() || '';
+        notesParts.push(`Departure: ${airline} ${flight}`.trim());
+      }
+
+      if (notesParts.length > 0) {
+        const existing = result.tripNotes?.trim();
+        const combined = notesParts.join('; ');
+        result.tripNotes = existing ? `${existing}; ${combined}` : combined;
+      }
+
+      // Clean up BRO temp fields
+      delete result._arrivalAirline;
+      delete result._arrivalFlightNumber;
+      delete result._departureAirline;
+      delete result._departureFlightNumber;
+      delete result._companyName;
 
       // Strip $ and commas from fare
       if (result.baseRateAmt) {
@@ -1099,6 +1210,23 @@ export function detectLimoAnywhereFormat(headers: string[]): boolean {
   ).length;
 
   return matchCount >= 2;
+}
+
+// Auto-detect Book Rides Online format from headers
+export function detectBookRidesOnlineFormat(headers: string[]): boolean {
+  // Reservation headers
+  const broReservationKeywords = ['BookingNumber', 'RunStartDate', 'ClientName', 'PassengerCount', 'PickupAirport'];
+  // Contact headers
+  const broContactKeywords = ['HasBROAccount', 'IsCorporateClient', 'IsVIP'];
+
+  const resMatchCount = headers.filter(h =>
+    broReservationKeywords.some(kw => h.toLowerCase() === kw.toLowerCase())
+  ).length;
+  const contactMatchCount = headers.filter(h =>
+    broContactKeywords.some(kw => h.toLowerCase() === kw.toLowerCase())
+  ).length;
+
+  return resMatchCount >= 3 || contactMatchCount >= 2;
 }
 
 // Auto-map columns based on headers

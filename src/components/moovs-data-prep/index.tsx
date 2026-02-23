@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import type { WorkflowType, FormatType, ColumnMapping, DataIssue, DuplicateGroup, WorkflowState } from '@/types/schemas';
 import { parseCSV, applyMappings, generateCSV, downloadCSV, CONTACT_HEADERS, RESERVATION_HEADERS } from '@/lib/csv-utils';
-import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, HUDSON_CONTACT_MAPPINGS, HUDSON_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, detectHudsonFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
+import { LIMOANYWHERE_CONTACT_MAPPINGS, LIMOANYWHERE_RESERVATION_MAPPINGS, HUDSON_CONTACT_MAPPINGS, HUDSON_RESERVATION_MAPPINGS, BOOKRIDESONLINE_CONTACT_MAPPINGS, BOOKRIDESONLINE_RESERVATION_MAPPINGS, autoMapColumns, detectLimoAnywhereFormat, detectHudsonFormat, detectBookRidesOnlineFormat, applyPhoneFallback, applyReservationTransforms } from '@/lib/limoanywhere-mappings';
 import { resetPlaceholderManager, type PlaceholderConfig } from '@/lib/placeholder-config';
 import { ContactLookup, parseContactsForLookup } from '@/lib/contact-lookup';
 import { validateContacts, validateReservations, detectDuplicates } from '@/lib/validation';
@@ -136,13 +136,18 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
       // Auto-detect format
       const isHudsonFormat = state.format === 'hudson' || detectHudsonFormat(referenceHeaders);
+      const isBroFormat = state.format === 'bookridesonline' || detectBookRidesOnlineFormat(referenceHeaders);
       const isLimoFormat = state.format === 'limoanywhere' || detectLimoAnywhereFormat(referenceHeaders);
 
       // Get appropriate mappings
       const targetFields = state.workflow === 'contacts' ? CONTACT_HEADERS : RESERVATION_HEADERS;
 
       let knownMappings: ColumnMapping[];
-      if (isHudsonFormat && state.workflow === 'contacts') {
+      if (isBroFormat && state.workflow === 'contacts') {
+        knownMappings = BOOKRIDESONLINE_CONTACT_MAPPINGS;
+      } else if (isBroFormat && state.workflow === 'reservations') {
+        knownMappings = BOOKRIDESONLINE_RESERVATION_MAPPINGS;
+      } else if (isHudsonFormat && state.workflow === 'contacts') {
         knownMappings = HUDSON_CONTACT_MAPPINGS;
       } else if (isHudsonFormat && state.workflow === 'reservations') {
         knownMappings = HUDSON_RESERVATION_MAPPINGS;
@@ -153,7 +158,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
       }
 
       let mappings: ColumnMapping[];
-      if (isHudsonFormat || isLimoFormat || state.format === 'limoanywhere') {
+      if (isBroFormat || isHudsonFormat || isLimoFormat || state.format === 'limoanywhere') {
         mappings = autoMapColumns(referenceHeaders, targetFields, knownMappings);
       } else {
         // For custom, start with empty mappings (user will map)
@@ -608,7 +613,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
             <span className="text-gray-500" aria-hidden="true">|</span>
             <span className="text-sm text-gray-900">
               {state.workflow === 'contacts' ? 'Contacts' : 'Reservations'}
-              {state.format && ` / ${state.format === 'limoanywhere' ? 'LimoAnywhere' : state.format === 'hudson' ? 'Hudson' : 'Custom'}`}
+              {state.format && ` / ${state.format === 'limoanywhere' ? 'LimoAnywhere' : state.format === 'hudson' ? 'Hudson' : state.format === 'bookridesonline' ? 'Book Rides Online' : 'Custom'}`}
             </span>
           </div>
         )}
@@ -661,7 +666,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
 
         {/* Step: Select Format */}
         {state.step === 'select-format' && (
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             <button
               onClick={() => selectFormat('limoanywhere')}
               className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left"
@@ -680,6 +685,16 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
               <h2 className="text-xl font-semibold text-gray-900">Hudson</h2>
               <p className="text-gray-900 mt-2">
                 Auto-mapped columns for Hudson (HGTS) exports. Splits full names automatically.
+              </p>
+            </button>
+            <button
+              onClick={() => selectFormat('bookridesonline')}
+              className="p-6 bg-white rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all text-left"
+            >
+              <FileSpreadsheet className="w-12 h-12 text-indigo-600 mb-4" aria-hidden="true" />
+              <h2 className="text-xl font-semibold text-gray-900">Book Rides Online</h2>
+              <p className="text-gray-900 mt-2">
+                Auto-mapped columns for Book Rides Online run list exports.
               </p>
             </button>
             <button

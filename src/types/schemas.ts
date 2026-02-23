@@ -72,7 +72,7 @@ export type OrderType = typeof ORDER_TYPES[number];
 
 // Workflow types
 export type WorkflowType = 'contacts' | 'reservations';
-export type FormatType = 'limoanywhere' | 'hudson' | 'custom';
+export type FormatType = 'limoanywhere' | 'hudson' | 'bookridesonline' | 'custom';
 
 // Column mapping
 export interface ColumnMapping {
