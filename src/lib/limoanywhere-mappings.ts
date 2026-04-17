@@ -427,6 +427,16 @@ function generateReservationPlaceholderEmail(firstName: string, lastName: string
   return `${cleanFirst}.${cleanLast}${suffix}@import.moovs.com`;
 }
 
+// Normalize date to MM/DD/YYYY. Accepts M/D/YY or M/D/YYYY; 2-digit year → 20XX.
+function normalizeDate(value: string | undefined): string {
+  if (!value?.trim()) return '';
+  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (!match) return value.trim();
+  const [, m, d, y] = match;
+  const year = y.length === 2 ? `20${y}` : y;
+  return `${m}/${d}/${year}`;
+}
+
 // Parse Hudson datetime: "2/16/2026 4:15:00 AM" → { date: "2/16/2026", time: "4:15 AM" }
 function parseHudsonDateTime(value: string | undefined): { date: string; time: string } {
   if (!value?.trim()) return { date: '', time: '' };
@@ -623,6 +633,10 @@ export function applyReservationTransforms(
       if (result.baseRateAmt) {
         result.baseRateAmt = result.baseRateAmt.replace(/[$,]/g, '').trim();
       }
+
+      // === NORMALIZE DATES (2-digit year → 4-digit) ===
+      if (result.pickUpDate) result.pickUpDate = normalizeDate(result.pickUpDate);
+      if (result.dropOffDate) result.dropOffDate = normalizeDate(result.dropOffDate);
 
       // === ORDER TYPE TRANSFORMATION ===
       if (result.orderType) {

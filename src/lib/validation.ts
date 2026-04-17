@@ -1,4 +1,4 @@
-import type { DataIssue, ORDER_TYPES, ParsedContact, DuplicateGroup } from '@/types/schemas';
+import type { DataIssue, ORDER_TYPES, ParsedContact, DuplicateGroup, WorkflowType } from '@/types/schemas';
 import { validatePhone, normalizePhone } from './phone-utils';
 import { validateEmail, normalizeEmail, generatePlaceholderEmail } from './email-utils';
 import { PLACEHOLDER_PHONE } from './limoanywhere-mappings';
@@ -338,9 +338,12 @@ function validateContactFields(
   }
 }
 
-// Detect duplicates within data
+// Detect duplicates within data. For reservations, matches on confirmation number
+// (plus pickup date/time fallback) so the same booker with many legit trips isn't
+// collapsed. For contacts, matches on name/email/phone identity.
 export function detectDuplicates(
-  data: Record<string, string>[]
+  data: Record<string, string>[],
+  workflow: WorkflowType = 'contacts'
 ): DuplicateGroup[] {
   const duplicates: DuplicateGroup[] = [];
   const seen = new Map<string, ParsedContact[]>();
@@ -355,25 +358,24 @@ export function detectDuplicates(
       originalData: row,
     };
 
-    // Create keys for matching
     const keys: string[] = [];
 
-    // Phone key
-    if (contact.phone) {
-      keys.push(`phone:${contact.phone}`);
+    if (workflow === 'reservations') {
+      const conf = row.confirmationNumber?.trim();
+      if (conf) {
+        keys.push(`conf:${conf}`);
+      } else if (row.pickUpDate && row.pickUpTime && row.pickUpAddress) {
+        // Fallback: same date+time+pickup is likely a true duplicate
+        keys.push(`trip:${row.pickUpDate}:${row.pickUpTime}:${row.pickUpAddress.toLowerCase().trim()}`);
+      }
+    } else {
+      if (contact.phone) keys.push(`phone:${contact.phone}`);
+      if (contact.email) keys.push(`email:${contact.email}`);
+      if (contact.firstName && contact.lastName) {
+        keys.push(`name:${contact.firstName.toLowerCase()}:${contact.lastName.toLowerCase()}`);
+      }
     }
 
-    // Email key
-    if (contact.email) {
-      keys.push(`email:${contact.email}`);
-    }
-
-    // Name key (only if both present)
-    if (contact.firstName && contact.lastName) {
-      keys.push(`name:${contact.firstName.toLowerCase()}:${contact.lastName.toLowerCase()}`);
-    }
-
-    // Check for matches
     keys.forEach((key) => {
       const existing = seen.get(key);
       if (existing) {

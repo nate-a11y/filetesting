@@ -326,7 +326,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
         : validateReservations(parsed, state.operatorId);
 
       // Detect duplicates
-      const duplicates = detectDuplicates(validatedData);
+      const duplicates = detectDuplicates(validatedData, state.workflow ?? 'contacts');
 
       setState(prev => ({
         ...prev,
@@ -447,7 +447,7 @@ export function MoovsDataPrep({ operatorId: initialOperatorId = '', className }:
       const newParsedData = prev.parsedData.filter((_, index) => !indicesToRemove.has(index));
 
       // Re-detect duplicates with updated data
-      const newDuplicates = detectDuplicates(newParsedData);
+      const newDuplicates = detectDuplicates(newParsedData, prev.workflow ?? 'contacts');
 
       // Re-validate
       const { validatedData, issues } = prev.workflow === 'contacts'
